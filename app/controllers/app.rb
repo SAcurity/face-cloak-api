@@ -36,14 +36,11 @@ module FaceCloak
             # POST /api/v1/face_records
             routing.post true do
               new_data = JSON.parse(routing.body.read)
-              new_face = FaceRecord.new(new_data)
-
-              if new_face.save
-                response.status = 201
-                { message: 'Face record saved', id: new_face.id }.to_json
-              else
-                routing.halt 400, { message: 'Could not save face record' }.to_json
-              end
+              new_face = FaceRecord.create(new_data)
+              response.status = 201
+              { message: 'Face record saved', id: new_face.id }.to_json
+            rescue StandardError
+              routing.halt 400, { message: 'Could not save face record' }.to_json
             end
 
             routing.on String do |id|
