@@ -1,6 +1,6 @@
 # FaceCloak API
 
-API to manage privacy settings on detected faces in images.  
+API for configuring privacy controls for detected faces in images.
 
 ## Routes
 
