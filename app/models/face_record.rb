@@ -53,7 +53,6 @@ module FaceCloak
         assigned_at: assigned_at,
         responded_at: responded_at,
         cloak_type: cloak_type,
-        effective_cloak_type: effective_cloak_type,
         updated_at: updated_at
       }
     end

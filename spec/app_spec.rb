@@ -85,5 +85,12 @@ describe FaceCloak::Api do
     _(face_record.updated_at).must_equal '2026-04-09T12:00:00+08:00'
     _(face_record.cloak_type).must_equal 'unveil'
   end
+
+  it 'does not persist effective_cloak_type in stored json' do
+    face_record = FaceCloak::FaceRecord.create('image_id' => 'image_1')
+    raw_json = File.read(File.join(__dir__, "../db/local/face_records/#{face_record.id}.txt"))
+
+    _(raw_json.include?('effective_cloak_type')).must_equal false
+  end
 end
 # rubocop:enable Metrics/BlockLength

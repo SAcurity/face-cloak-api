@@ -12,6 +12,7 @@ module FaceCloak
     # rubocop:disable Metrics/BlockLength
     route do |routing|
       FaceCloak::FaceRecord.setup
+      response['Content-Type'] = 'application/json'
 
       routing.root do
         response.status = 200
@@ -26,14 +27,14 @@ module FaceCloak
         routing.on 'v1' do
           routing.on 'face_records' do
             # GET /api/v1/face_records
-            routing.get do
+            routing.get true do
               face_records = FaceRecord.all
               response.status = 200
-              JSON.pretty_generate(face_records.map(&:to_h))
+              face_records.map(&:to_h).to_json
             end
 
             # POST /api/v1/face_records
-            routing.post do
+            routing.post true do
               new_data = JSON.parse(routing.body.read)
               new_face = FaceRecord.new(new_data)
 
@@ -52,7 +53,7 @@ module FaceCloak
                 routing.halt 404, { message: 'Face record not found' }.to_json unless face_record
 
                 response.status = 200
-                JSON.pretty_generate(face_record.to_h)
+                face_record.to_json
               end
 
               # POST /api/v1/face_records/:id/assign
