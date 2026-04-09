@@ -50,7 +50,7 @@ module FaceCloak
               # GET /api/v1/face_records/:id
               routing.get true do
                 face_record = FaceRecord.find(id)
-                routing.halt 404, { message: 'Face record not found' }.to_json unless face_record
+                next not_found_message('Face record not found') unless face_record
 
                 response.status = 200
                 face_record.to_json
@@ -59,7 +59,7 @@ module FaceCloak
               # POST /api/v1/face_records/:id/assign
               routing.post 'assign' do
                 face_record = FaceRecord.find(id)
-                routing.halt 404, { message: 'Face record not found' }.to_json unless face_record
+                next not_found_message('Face record not found') unless face_record
 
                 assign_data = JSON.parse(routing.body.read)
                 assigned_user_id = assign_data.fetch('assigned_user_id')
@@ -69,14 +69,14 @@ module FaceCloak
                   response.status = 201
                   { message: 'Face record assigned', assigned_user_id: assigned_user_id }.to_json
                 else
-                  routing.halt 400, { message: 'Could not assign face record' }.to_json
+                  bad_request_message('Could not assign face record')
                 end
               end
 
               # POST /api/v1/face_records/:id/respond
               routing.post 'respond' do
                 face_record = FaceRecord.find(id)
-                routing.halt 404, { message: 'Face record not found' }.to_json unless face_record
+                next not_found_message('Face record not found') unless face_record
 
                 response_data = JSON.parse(routing.body.read)
                 cloak_type = response_data.fetch('cloak_type')
@@ -86,7 +86,7 @@ module FaceCloak
                   response.status = 201
                   { message: 'Face record updated', cloak_type: cloak_type }.to_json
                 else
-                  routing.halt 400, { message: 'Could not update face record' }.to_json
+                  bad_request_message('Could not update face record')
                 end
               end
             end
@@ -95,5 +95,17 @@ module FaceCloak
       end
     end
     # rubocop:enable Metrics/BlockLength
+
+    private
+
+    def not_found_message(message)
+      response.status = 404
+      { message: message }.to_json
+    end
+
+    def bad_request_message(message)
+      response.status = 400
+      { message: message }.to_json
+    end
   end
 end

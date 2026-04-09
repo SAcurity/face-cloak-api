@@ -43,8 +43,8 @@ module FaceCloak
     def effective_cloak_type
       responded_at.nil? ? CloakType::DEFAULT : cloak_type
     end
-    
-    def to_h # rubocop:disable Metrics/MethodLength
+
+    def to_h
       {
         type: 'face_record',
         id: id,
