@@ -57,6 +57,7 @@ build-iPhoneSimulator/
 
 /db/local/*.db
 /db/local/*.txt
+/db/local/storage/
 !/db/local/.keep
 
 # Secrets

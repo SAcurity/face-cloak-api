@@ -86,12 +86,25 @@ Install this API by cloning the relevant branch and installing required gems fro
 bundle install
 ```
 
+Copy config/secrets-example.yml to config/secrets.yml and adjust as needed.
+
+Setup development database once:
+
+```bash
+rake db:migrate
+```
+
 ## Test
+Setup test database once:
+
+```bash
+RACK_ENV=test rake db:migrate
+```
 
 Run the test script:
 
 ```bash
-bundle exec rake spec
+rake spec
 ```
 
 ## Run
@@ -100,4 +113,17 @@ Run this API using:
 
 ```bash
 puma
+```
+
+Or you can rerun the API using:
+
+```bash
+rake rerun
+```
+
+## Release Check
+Before submitting pull requests, please check if specs, style, and dependency audits pass:
+
+```bash
+rake release_check
 ```
