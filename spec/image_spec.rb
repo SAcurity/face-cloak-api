@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'spec_helper'
+require 'tmpdir'
 require 'tempfile'
 
 describe 'Test Image Handling' do
@@ -81,6 +82,56 @@ describe 'Test Image Handling' do
     _(img.file_data.end_with?('.png')).must_equal true
     _(img.file_data).wont_equal DATA[:images][1]['file_data']
     _(File.exist?(File.join(FaceCloak::Image::STORAGE_DIR, img.file_data))).must_equal true
+  end
+
+  it 'HAPPY: should suffix duplicate file names for the same owner' do
+    Dir.mktmpdir do |dir1|
+      Dir.mktmpdir do |dir2|
+        path1 = File.join(dir1, 'repeat.png')
+        path2 = File.join(dir2, 'repeat.png')
+        File.binwrite(path1, 'first image')
+        File.binwrite(path2, 'second image')
+
+        upload1 = Rack::Test::UploadedFile.new(path1, 'image/png')
+        upload2 = Rack::Test::UploadedFile.new(path2, 'image/png')
+
+        post 'api/v1/images', { owner_id: 'photographer_alina', file: upload1 }
+        _(last_response.status).must_equal 201
+        first_result = JSON.parse(last_response.body)
+
+        post 'api/v1/images', { owner_id: 'photographer_alina', file: upload2 }
+        _(last_response.status).must_equal 201
+        second_result = JSON.parse(last_response.body)
+
+        _(first_result['data']['attributes']['file_name']).must_equal 'repeat.png'
+        _(second_result['data']['attributes']['file_name']).must_equal 'repeat-1.png'
+      end
+    end
+  end
+
+  it 'HAPPY: should allow different owners to keep the same file name' do
+    Dir.mktmpdir do |dir1|
+      Dir.mktmpdir do |dir2|
+        path1 = File.join(dir1, 'shared.png')
+        path2 = File.join(dir2, 'shared.png')
+        File.binwrite(path1, 'owner a image')
+        File.binwrite(path2, 'owner b image')
+
+        upload1 = Rack::Test::UploadedFile.new(path1, 'image/png')
+        upload2 = Rack::Test::UploadedFile.new(path2, 'image/png')
+
+        post 'api/v1/images', { owner_id: 'photographer_alina', file: upload1 }
+        _(last_response.status).must_equal 201
+        first_result = JSON.parse(last_response.body)
+
+        post 'api/v1/images', { owner_id: 'photographer_bruno', file: upload2 }
+        _(last_response.status).must_equal 201
+        second_result = JSON.parse(last_response.body)
+
+        _(first_result['data']['attributes']['file_name']).must_equal 'shared.png'
+        _(second_result['data']['attributes']['file_name']).must_equal 'shared.png'
+      end
+    end
   end
 
   it 'HAPPY: should delete an owned image and its stored file' do

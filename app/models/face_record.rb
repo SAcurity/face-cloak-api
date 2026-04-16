@@ -55,7 +55,7 @@ module FaceCloak
 
     def self.timestamp
       # use taiwan time
-      Time.now.getlocal('+08:00').iso8601
+      Time.now.getlocal('+08:00')
     end
 
     # rubocop:disable Metrics/MethodLength
