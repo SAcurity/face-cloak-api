@@ -11,7 +11,6 @@ Sequel.migration do
       String :file_data, null: false # Stores the generated local storage key
 
       DateTime :created_at
-      DateTime :updated_at
     end
   end
 end

@@ -3,17 +3,14 @@
   owner_id: 'owner_1'
   file_name: 'mountain_view.png'
   file_data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a2ooAAAAASUVORK5CYII='
-  created_at: null
-  updated_at: null
+  created_at: '2026-04-09 09:00:00 +08:00'
 - id: 2
   owner_id: 'owner_1'
   file_name: 'city_street.png'
-  file_data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a2ooAAAAASUVORK5CYII='
-  created_at: null
-  updated_at: null
+  file_data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR42mP8z8BQDwAF/AL+7xW2NwAAAABJRU5ErkJggg=='
+  created_at: '2026-04-09 09:30:00 +08:00'
 - id: 3
   owner_id: 'owner_2'
   file_name: 'group_photo.png'
-  file_data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a2ooAAAAASUVORK5CYII='
-  created_at: null
-  updated_at: null
+  file_data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR42mNk+M/wHwAE/wJ/l5xWAAAAAElFTkSuQmCC'
+  created_at: '2026-04-09 10:00:00 +08:00'
