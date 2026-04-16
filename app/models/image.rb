@@ -97,8 +97,7 @@ module FaceCloak
     def delete_stored_file!
       return if file_data.nil? || file_data.empty?
 
-      path = storage_path
-      File.delete(path) if File.exist?(path)
+      FileUtils.rm_f(storage_path)
     end
   end
 end
