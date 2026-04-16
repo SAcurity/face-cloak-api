@@ -25,6 +25,8 @@ Seed image records may still provide Base64 input data, which the app converts i
   - `owner_id`
   - `file` (uploaded image file)
   The API reads `file_name` directly from the uploaded file metadata, stores the binary in local storage, and saves the generated storage key in `file_data`.
+  If the same owner uploads the same file name more than once, the API automatically suffixes the later names such as `photo-1.png`.
+  Different owners may keep the same original file name without suffixing.
 
 - GET `/api/v1/images/:id`
   Returns the image binary for that record, with `Content-Type` derived from `file_name`.

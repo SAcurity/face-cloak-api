@@ -8,8 +8,8 @@ Sequel.migration do
       String :id, primary_key: true
       foreign_key :image_id, :images, type: String, null: false
       String :assigned_user_id
-      String :assigned_at
-      String :responded_at
+      DateTime :assigned_at
+      DateTime :responded_at
       String :cloak_type, default: 'blur'
 
       DateTime :created_at

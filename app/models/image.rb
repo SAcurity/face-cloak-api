@@ -19,6 +19,7 @@ module FaceCloak
 
     def before_create
       self.id ||= IdGenerator.next_id(prefix: 'img')
+      ensure_unique_file_name!
       persist_incoming_file_data!
       super
     end
@@ -64,6 +65,20 @@ module FaceCloak
     end
 
     private
+
+    def ensure_unique_file_name!
+      return if owner_id.to_s.empty? || file_name.to_s.empty?
+
+      original_name = file_name
+      ext = File.extname(original_name)
+      stem = File.basename(original_name, ext)
+      suffix = 1
+
+      while self.class.where(owner_id:, file_name:).first
+        self.file_name = "#{stem}-#{suffix}#{ext}"
+        suffix += 1
+      end
+    end
 
     def persist_incoming_file_data!
       return if file_data.nil? || file_data.empty? || stored_file_key?(file_data)

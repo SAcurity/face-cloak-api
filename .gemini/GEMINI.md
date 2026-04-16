@@ -91,6 +91,7 @@ JSON response envelope:
 ### Data store
 
 The app uses Sequel models for `Image`, `FaceRecord`, and `ActionLog`, connected with `one_to_many` / `many_to_one` associations. Deleting an `Image` also deletes its `FaceRecord` rows, removes the stored image file from `db/local/storage`, and deleting a `FaceRecord` also deletes its `ActionLog` rows via `plugin :association_dependencies`. Uploaded image binary data is persisted to local storage, while `images.file_data` stores the generated storage key. The shared database handle lives on `FaceCloak::Api.DB`.
+For uploaded image names, uniqueness is scoped per owner. If the same owner uploads the same `file_name` again, the app auto-suffixes the later record name (for example `photo-1.png`), while different owners may reuse the same original name.
 
 ### Environments
 
