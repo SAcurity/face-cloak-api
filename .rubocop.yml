@@ -7,11 +7,29 @@ AllCops:
 
 plugins:
   - rubocop-minitest
+  - rubocop-performance
+  - rubocop-rake
+  - rubocop-sequel
 
 Metrics/BlockLength:
   Enabled: true
   Exclude:
     - spec/**/*
+    - app/controllers/*.rb
+    - Rakefile
+
+Metrics/ClassLength:
+  Enabled: false
+
+Style/HashSyntax:
+  Exclude:
+    - Rakefile
+    - db/migrations/*.rb
+
+Style/SymbolArray:
+  Exclude:
+    - Rakefile
+    - db/migrations/*.rb
 
 Security/YAMLLoad:
   Enabled: true

@@ -1,25 +1,33 @@
 ---
-- image_id: 'image_1'
+- id: 1
+  image_id: 1
   assigned_user_id: null
   assigned_at: null
   responded_at: null
   cloak_type: 'blur'
+  created_at: null
   updated_at: null
-- image_id: 'image_1'
+- id: 2
+  image_id: 1
   assigned_user_id: 'user_123'
   assigned_at: '2026-04-09T10:30:00+08:00'
   responded_at: '2026-04-09T11:00:00+08:00'
   cloak_type: 'comic'
+  created_at: null
   updated_at: '2026-04-09T11:00:00+08:00'
-- image_id: 'image_2'
+- id: 3
+  image_id: 2
   assigned_user_id: 'user_456'
   assigned_at: '2026-04-09T12:00:00+08:00'
   responded_at: '2026-04-09T12:30:00+08:00'
   cloak_type: 'unveil'
+  created_at: null
   updated_at: '2026-04-09T12:30:00+08:00'
-- image_id: 'image_2'
+- id: 4
+  image_id: 2
   assigned_user_id: 'user_123'
   assigned_at: '2026-04-08T10:30:00+08:00'
   responded_at: null
   cloak_type: 'blur'
+  created_at: null
   updated_at: null

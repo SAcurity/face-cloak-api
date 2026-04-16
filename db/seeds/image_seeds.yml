@@ -1,0 +1,19 @@
+---
+- id: 1
+  owner_id: 'owner_1'
+  file_name: 'mountain_view.png'
+  file_data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a2ooAAAAASUVORK5CYII='
+  created_at: null
+  updated_at: null
+- id: 2
+  owner_id: 'owner_1'
+  file_name: 'city_street.png'
+  file_data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a2ooAAAAASUVORK5CYII='
+  created_at: null
+  updated_at: null
+- id: 3
+  owner_id: 'owner_2'
+  file_name: 'group_photo.png'
+  file_data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a2ooAAAAASUVORK5CYII='
+  created_at: null
+  updated_at: null

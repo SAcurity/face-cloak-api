@@ -1,0 +1,26 @@
+---
+- id: 1
+  face_record_id: 1
+  actor_id: 'owner_1'
+  action: 'create'
+  created_at: null
+- id: 2
+  face_record_id: 2
+  actor_id: 'owner_1'
+  action: 'create'
+  created_at: null
+- id: 3
+  face_record_id: 2
+  actor_id: 'owner_1'
+  action: 'assign'
+  created_at: null
+- id: 4
+  face_record_id: 3
+  actor_id: 'owner_1'
+  action: 'create'
+  created_at: null
+- id: 5
+  face_record_id: 3
+  actor_id: 'owner_1'
+  action: 'assign'
+  created_at: null

@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
-require_relative 'app/controllers/app'
+require './require_app'
+require_app
 
 run FaceCloak::Api.freeze.app

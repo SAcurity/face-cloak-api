@@ -4,14 +4,79 @@ API for configuring privacy controls for detected faces in images.
 
 ## Routes
 
-All routes return JSON.
+All routes return JSON except `GET /api/v1/images/[ID]`, which returns binary image content.
+Uploaded images are stored in local storage, while the database keeps a storage key in `file_data`.
+Seed image records may still provide Base64 input data, which the app converts into local storage files when records are created.
 
-- GET `/` : root route shows if the Web API is running
-- GET `api/v1/face_records/` : returns all face records
-- GET `api/v1/face_records/[ID]` : returns details about a single face record with given ID
-- POST `api/v1/face_records/` : creates a new face record
-- POST `api/v1/face_records/[ID]/assign` : assigns a face record to an assigned user ID
-- POST `api/v1/face_records/[ID]/respond` : updates the selected cloak type for a face record
+### Root
+
+- GET `/`
+  Returns API metadata and available resources.
+
+### Images
+
+- GET `/api/v1/images`
+  Returns all image records as JSON.
+
+- POST `/api/v1/images`
+  Creates an image record.
+  Multipart form fields:
+  - `owner_id`
+  - `file` (uploaded image file)
+  The API reads `file_name` directly from the uploaded file metadata, stores the binary in local storage, and saves the generated storage key in `file_data`.
+
+- GET `/api/v1/images/:id`
+  Returns the image binary for that record, with `Content-Type` derived from `file_name`.
+  Opening this route in a browser will usually display the image directly.
+
+- DELETE `/api/v1/images/:id`
+  Deletes an image record, its stored image file, and any dependent face records/action logs.
+  Once deleted, repeating the same request returns `404` because the image no longer exists.
+  - Required header:
+    - `X-Actor-Id` must match the image owner.
+
+### Face Records
+
+- GET `/api/v1/face_records`
+  Returns all face records as JSON.
+
+- POST `/api/v1/face_records`
+  Creates a face record for an existing image.
+  - Request body:
+    - `image_id`
+    - `cloak_type` (optional; defaults to the model behavior)
+  - Required header:
+    - `X-Actor-Id` must match the image owner.
+
+- GET `/api/v1/face_records/:id`
+  Returns a single face record as JSON.
+
+- POST `/api/v1/face_records/:id/assignment`
+  Assigns a face record to a user.
+  - Request body:
+    - `assigned_user_id`
+  - Required header:
+    - `X-Actor-Id` must match the image owner.
+
+- DELETE `/api/v1/face_records/:id/assignment`
+  Clears the assigned user from a face record and resets its effective cloak state back to the default `blur`.
+  - Required header:
+    - `X-Actor-Id` must match the image owner.
+
+- POST `/api/v1/face_records/:id/respond`
+  Updates the selected cloak type for the assigned user.
+  - Request body:
+    - `cloak_type`
+  - Required header:
+    - `X-Actor-Id` must match `assigned_user_id`.
+
+### Action Logs
+
+- GET `/api/v1/images/:id/logs`
+  Returns all action logs for face records that belong to the specified image.
+
+- GET `/api/v1/face_records/:id/logs`
+  Returns all action logs for the specified face record.
 
 ## Install
 
@@ -26,7 +91,7 @@ bundle install
 Run the test script:
 
 ```bash
-ruby spec/api_spec.rb
+bundle exec rake spec
 ```
 
 ## Run
