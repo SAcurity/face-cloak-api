@@ -1,42 +1,51 @@
 # frozen_string_literal: true
 
-require 'base64'
-require 'fileutils'
 require 'json'
-require 'rbnacl'
-require 'time'
-
-require_relative 'cloak_type'
+require 'sequel'
+require_relative 'id_generator'
 
 module FaceCloak
   # Represents one detected face and its masking lifecycle.
-  class FaceRecord
-    STORE_PATH = 'db/local/face_records'
+  class FaceRecord < Sequel::Model
+    many_to_one :image
+    one_to_many :action_logs
+    plugin :association_dependencies, action_logs: :destroy
 
-    attr_reader :id, :image_id, :assigned_user_id, :assigned_at, :responded_at,
-                :cloak_type, :updated_at
+    plugin :timestamps, update_on_create: true
 
-    def initialize(attributes)
-      @id = attributes['id'] || new_id
-      @image_id = attributes['image_id']
-      @assigned_user_id = attributes['assigned_user_id']
-      @assigned_at = attributes['assigned_at']
-      @responded_at = attributes['responded_at']
-      @cloak_type = normalize_cloak_type(attributes['cloak_type'])
-      @updated_at = attributes['updated_at']
+    def before_create
+      self.id ||= IdGenerator.next_id(prefix: 'fac')
+      super
+    end
+
+    def validate
+      super
+      self.cloak_type = CloakType.normalize(cloak_type)
     end
 
     def assign_to(user_id, at: self.class.timestamp)
-      @assigned_user_id = user_id
-      @assigned_at = at
-      @updated_at = nil
+      self.assigned_user_id = user_id
+      self.assigned_at = at
+      self
+    end
+
+    def assigned?
+      !assigned_user_id.nil? && !assigned_user_id.empty?
+    end
+
+    def unassign
+      raise 'Face record is not assigned' unless assigned?
+
+      self.assigned_user_id = nil
+      self.assigned_at = nil
+      self.responded_at = nil
+      self.cloak_type = CloakType::DEFAULT
       self
     end
 
     def respond_with(cloak_type, at: self.class.timestamp)
-      @responded_at ||= at
-      @cloak_type = normalize_cloak_type(cloak_type)
-      @updated_at = at
+      self.responded_at ||= at
+      self.cloak_type = CloakType.normalize(cloak_type)
       self
     end
 
@@ -44,69 +53,30 @@ module FaceCloak
       responded_at.nil? ? CloakType::DEFAULT : cloak_type
     end
 
-    def to_h
-      {
-        type: 'face_record',
-        id: id,
-        image_id: image_id,
-        assigned_user_id: assigned_user_id,
-        assigned_at: assigned_at,
-        responded_at: responded_at,
-        cloak_type: cloak_type,
-        updated_at: updated_at
-      }
-    end
-
-    def to_json(options = {})
-      JSON(to_h, options)
-    end
-
-    def save
-      FileUtils.mkdir_p(STORE_PATH)
-      File.write("#{STORE_PATH}/#{id}.txt", to_json)
-    end
-
-    # file store must be setup once when application runs
-    def self.setup
-      FileUtils.mkdir_p(STORE_PATH)
-    end
-
-    def self.all
-      Dir.glob("#{STORE_PATH}/*.txt").map do |file_path|
-        record_file = File.read(file_path)
-        new(JSON.parse(record_file))
-      end
-    end
-
-    def self.create(attributes = {})
-      face_record = new(attributes)
-      face_record.save
-      face_record
-    end
-
-    def self.find(find_id)
-      record_file = File.read("#{STORE_PATH}/#{find_id}.txt")
-      new(JSON.parse(record_file))
-    rescue Errno::ENOENT
-      nil
-    end
-
     def self.timestamp
       # use taiwan time
       Time.now.getlocal('+08:00').iso8601
     end
 
-    private
-
-    def normalize_cloak_type(cloak_type)
-      return CloakType::DEFAULT if cloak_type.nil?
-
-      CloakType.normalize(cloak_type)
+    # rubocop:disable Metrics/MethodLength
+    def to_h
+      {
+        type: 'face_record',
+        attributes: {
+          id:,
+          image_id:,
+          assigned_user_id:,
+          assigned_at:,
+          responded_at:,
+          cloak_type:,
+          updated_at:
+        }
+      }
     end
+    # rubocop:enable Metrics/MethodLength
 
-    def new_id
-      seed = "#{Time.now.to_f}-#{rand}"
-      Base64.urlsafe_encode64(RbNaCl::Hash.sha256(seed))[0..9]
+    def to_json(options = {})
+      JSON({ data: to_h }, options)
     end
   end
 end
