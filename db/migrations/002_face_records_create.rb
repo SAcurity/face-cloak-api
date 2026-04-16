@@ -5,8 +5,8 @@ require 'sequel'
 Sequel.migration do
   change do
     create_table(:face_records) do
-      primary_key :id
-      foreign_key :image_id, :images, null: false
+      String :id, primary_key: true
+      foreign_key :image_id, :images, type: String, null: false
       String :assigned_user_id
       String :assigned_at
       String :responded_at

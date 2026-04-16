@@ -28,7 +28,7 @@ describe 'Test FaceRecord Handling' do
   end
 
   it 'SAD: should return error if unknown face record requested' do
-    get '/api/v1/face_records/99999'
+    get '/api/v1/face_records/missing-face'
 
     _(last_response.status).must_equal 404
   end
@@ -130,16 +130,16 @@ describe 'Test FaceRecord Handling' do
   end
 
   it 'HAPPY: should be able to respond to a face record as assignee' do
-    face = FaceCloak::FaceRecord.create(image_id: @img.id, assigned_user_id: 'user_123')
+    face = FaceCloak::FaceRecord.create(image_id: @img.id, assigned_user_id: 'reviewer_mina')
     respond_data = { cloak_type: 'sunglasses' }
 
-    header 'X-Actor-Id', 'user_123'
+    header 'X-Actor-Id', 'reviewer_mina'
     post "api/v1/face_records/#{face.id}/respond", respond_data.to_json
     _(last_response.status).must_equal 201
   end
 
   it 'SAD: should NOT be able to respond to a face record if not assignee' do
-    face = FaceCloak::FaceRecord.create(image_id: @img.id, assigned_user_id: 'user_123')
+    face = FaceCloak::FaceRecord.create(image_id: @img.id, assigned_user_id: 'reviewer_mina')
     respond_data = { cloak_type: 'sunglasses' }
 
     header 'X-Actor-Id', 'stranger'
@@ -161,10 +161,10 @@ describe 'Test FaceRecord Handling' do
   end
 
   it 'SAD: should reject invalid cloak types on respond' do
-    face = FaceCloak::FaceRecord.create(image_id: @img.id, assigned_user_id: 'user_123')
+    face = FaceCloak::FaceRecord.create(image_id: @img.id, assigned_user_id: 'reviewer_mina')
     respond_data = { cloak_type: 'comics' }
 
-    header 'X-Actor-Id', 'user_123'
+    header 'X-Actor-Id', 'reviewer_mina'
     post "api/v1/face_records/#{face.id}/respond", respond_data.to_json
     _(last_response.status).must_equal 400
   end

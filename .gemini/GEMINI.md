@@ -78,6 +78,8 @@ REST routes are versioned under `api/v1/...` with nested resources:
 - POST `api/v1/face_records/[ID]/assignment` : assigns a face record to an assigned user ID
 - DELETE `api/v1/face_records/[ID]/assignment` : clears the assigned user from a face record and resets cloak state to default `blur`
 - POST `api/v1/face_records/[ID]/respond` : updates the selected cloak type for a face record
+
+`images.id` and `face_records.id` are opaque generated strings rather than sequential integers, with resource prefixes such as `img_...` and `fac_...`.
 - DELETE `api/v1/images/[ID]` : deletes an image, its stored file, and dependent records; repeating the delete returns not found because the image is already gone
 
 JSON response envelope:

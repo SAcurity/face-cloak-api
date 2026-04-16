@@ -35,7 +35,7 @@ describe 'Test ActionLog Handling' do
   end
 
   it 'SAD: should return error if unknown image logs requested' do
-    get '/api/v1/images/99999/logs'
+    get '/api/v1/images/missing-image/logs'
 
     _(last_response.status).must_equal 404
   end

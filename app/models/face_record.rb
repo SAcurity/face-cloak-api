@@ -2,6 +2,7 @@
 
 require 'json'
 require 'sequel'
+require_relative 'id_generator'
 
 module FaceCloak
   # Represents one detected face and its masking lifecycle.
@@ -11,6 +12,11 @@ module FaceCloak
     plugin :association_dependencies, action_logs: :destroy
 
     plugin :timestamps, update_on_create: true
+
+    def before_create
+      self.id ||= IdGenerator.next_id(prefix: 'fac')
+      super
+    end
 
     def validate
       super

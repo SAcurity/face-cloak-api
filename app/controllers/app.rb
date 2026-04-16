@@ -50,7 +50,7 @@ module FaceCloak
           routing.on String do |id|
             routing.is 'logs' do
               routing.get do
-                image = Image[id.to_i]
+                image = Image[id]
                 raise('Image not found') unless image
 
                 logs = image.face_records
@@ -67,7 +67,7 @@ module FaceCloak
             routing.is do
               # GET /api/v1/images/:id (Display specified image - PUBLIC)
               routing.get do
-                image = Image[id.to_i]
+                image = Image[id]
                 raise('Image not found') unless image
 
                 # Set binary content type based on extension
@@ -81,7 +81,7 @@ module FaceCloak
               # DELETE /api/v1/images/:id
               if routing.delete?
                 begin
-                  image = Image[id.to_i]
+                  image = Image[id]
                   raise('Image not found') unless image
 
                   requester_id = routing.env['HTTP_X_ACTOR_ID']
@@ -117,7 +117,7 @@ module FaceCloak
           # POST /api/v1/face_records
           routing.post true do
             new_data = parse_request(routing)
-            image = Image[new_data['image_id'].to_i]
+            image = Image[new_data['image_id']]
             raise('Image not found') unless image
 
             # RBAC: Only owner can create face records for their image
@@ -146,7 +146,7 @@ module FaceCloak
             # GET /api/v1/face_records/:id/logs
             routing.is 'logs' do
               routing.get do
-                face_record = FaceRecord[id.to_i]
+                face_record = FaceRecord[id]
                 raise('Face record not found') unless face_record
 
                 output = { data: face_record.action_logs.map(&:to_h) }
@@ -159,7 +159,7 @@ module FaceCloak
             # GET /api/v1/face_records/:id
             routing.is do
               routing.get do
-                face_record = FaceRecord[id.to_i]
+                face_record = FaceRecord[id]
                 face_record ? face_record.to_json : raise('Face record not found')
               rescue StandardError => e
                 routing.halt 404, not_found(e.message)
@@ -170,7 +170,7 @@ module FaceCloak
             # DELETE /api/v1/face_records/:id/assignment
             routing.is 'assignment' do
               routing.post do
-                face_record = FaceRecord[id.to_i]
+                face_record = FaceRecord[id]
                 raise('Face record not found') unless face_record
 
                 # RBAC: Only image owner can edit/assign face records
@@ -195,7 +195,7 @@ module FaceCloak
 
               if routing.delete?
                 begin
-                  face_record = FaceRecord[id.to_i]
+                  face_record = FaceRecord[id]
                   raise('Face record not found') unless face_record
 
                   requester_id = routing.env['HTTP_X_ACTOR_ID']
@@ -220,7 +220,7 @@ module FaceCloak
             # POST /api/v1/face_records/:id/respond
             routing.is 'respond' do
               routing.post do
-                face_record = FaceRecord[id.to_i]
+                face_record = FaceRecord[id]
                 raise('Face record not found') unless face_record
 
                 # RBAC: Only the assigned user can respond

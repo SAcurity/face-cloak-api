@@ -5,6 +5,7 @@ require 'sequel'
 require 'base64'
 require 'fileutils'
 require 'securerandom'
+require_relative 'id_generator'
 
 module FaceCloak
   # Represents an image that can contain multiple face records.
@@ -17,6 +18,7 @@ module FaceCloak
     plugin :timestamps
 
     def before_create
+      self.id ||= IdGenerator.next_id(prefix: 'img')
       persist_incoming_file_data!
       super
     end

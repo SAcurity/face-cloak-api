@@ -7,6 +7,7 @@ API for configuring privacy controls for detected faces in images.
 All routes return JSON except `GET /api/v1/images/[ID]`, which returns binary image content.
 Uploaded images are stored in local storage, while the database keeps a storage key in `file_data`.
 Seed image records may still provide Base64 input data, which the app converts into local storage files when records are created.
+`images` and `face_records` use opaque generated string IDs rather than sequential numeric IDs. Generated IDs are prefixed by resource type, such as `img_...` and `fac_...`.
 
 ### Root
 

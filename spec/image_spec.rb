@@ -33,7 +33,7 @@ describe 'Test Image Handling' do
   end
 
   it 'SAD: should return error if unknown image requested' do
-    get '/api/v1/images/99999'
+    get '/api/v1/images/missing-image'
 
     _(last_response.status).must_equal 404
   end
@@ -104,8 +104,8 @@ describe 'Test Image Handling' do
   end
 
   it 'SAD: should return not found when deleting an unknown image' do
-    header 'X-Actor-Id', 'owner_1'
-    delete 'api/v1/images/99999'
+    header 'X-Actor-Id', 'photographer_alina'
+    delete 'api/v1/images/missing-image'
     _(last_response.status).must_equal 404
 
     result = JSON.parse(last_response.body)
