@@ -91,6 +91,10 @@ module FaceCloak
               routing.get do
                 image = Image[id] || raise(Sequel::NoMatchingRow, 'Image not found')
 
+                # RBAC: ONLY Owner can see all logs for an image
+                requester_id = routing.env['HTTP_X_ACTOR_ID']
+                raise ForbiddenRequest, 'You do not own this image' unless requester_id == image.owner_id
+
                 logs = image.face_records
                             .flat_map(&:action_logs)
                             .sort_by(&:id)
@@ -172,6 +176,12 @@ module FaceCloak
             routing.is 'logs' do
               routing.get do
                 face_record = FaceRecord[id] || raise(Sequel::NoMatchingRow, 'Face record not found')
+
+                # RBAC: Only Owner or the specific Assignee can see logs for this record
+                requester_id = routing.env['HTTP_X_ACTOR_ID']
+                is_owner = requester_id == face_record.image.owner_id
+                is_assignee = requester_id == face_record.assigned_user_id
+                raise ForbiddenRequest, 'Access denied' unless is_owner || is_assignee
 
                 output = { data: face_record.action_logs.map(&:to_h) }
                 JSON.pretty_generate(output)

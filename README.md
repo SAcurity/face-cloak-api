@@ -14,95 +14,90 @@ This project follows strict security hardening standards:
 ## Core Business Rules
 
 ### 1. Automated Detection
-- When an image is uploaded via `POST /api/v1/images`, the system automatically "detects" faces and creates corresponding `FaceRecord` entries.
+- When an image is uploaded via `POST` `/api/v1/images`, the system automatically "detects" faces and creates corresponding `FaceRecord` entries.
 - All new faces default to a `blur` state.
 
 ### 2. Zero-Trust Access Control
 - **Owner Role**: Can upload images and *assign* faces to users.
 - **Assignee Role**: ONLY the assigned user can decide to `unveil` their face.
 - **Privacy Barrier**: The image owner **cannot** unveil a face they are not assigned to.
-- **Rendered Output**: `GET /api/v1/images/:id` only returns raw data if **ALL** faces are unveiled. If any face is unassigned or masked, it returns a privacy-filtered placeholder.
+- **Self-Assignment Constraint**: Owners can only assign ONE face record to themselves per image to prevent bulk identity unmasking.
+- **Rendered Output**: `GET` `/api/v1/images/:id` only returns raw data if **ALL** faces are unveiled. If any face is unassigned or masked, it returns a privacy-filtered placeholder.
 
 ## Routes
 
-All routes return JSON except `GET /api/v1/images/:id` and `GET /api/v1/images/:id/raw`, which return binary image content.
+All routes return JSON except `GET` `/api/v1/images/:id` and `GET` `/api/v1/images/:id/raw`, which return binary image content.
 
 ### Root
 
-- GET `/`
+- `GET` `/`
   Returns API metadata and resources.
 
 ### Images
 
-- GET `/api/v1/images`
+- `GET` `/api/v1/images`
   Returns all image metadata as JSON.
 
-- POST `/api/v1/images`
+- `POST` `/api/v1/images`
   Uploads an image and automatically triggers face detection.
-  - Request body:
+  - Request body (Multipart):
     - `owner_id`
-    - `file`
+    - `file` (Uploaded image)
 
-- GET `/api/v1/images/:id`
+- `GET` `/api/v1/images/:id`
   Returns the default privacy-filtered image view.
-  - Raw binary is returned only when all face records are effectively `unveil`.
+  - **Everyone (including Owner)**: Raw binary is returned ONLY when ALL face records are effectively `unveil`.
   - Otherwise the API returns `PRIVACY_FILTERED_DATA_FOR_<image_id>` and sets `X-Privacy-Filtered: true`.
 
-- GET `/api/v1/images/:id/raw`
-  Returns the raw image binary regardless of face state.
-  - Required header:
-    - `X-Actor-Id` must match the image owner.
+- `GET` `/api/v1/images/:id/raw`
+  Returns the raw image binary regardless of face state (Administrative Access).
+  - **Owner ONLY**: Required header `X-Actor-Id` must match the image owner.
 
-- DELETE `/api/v1/images/:id`
+- `DELETE` `/api/v1/images/:id`
   Deletes an image and all associated face records and action logs.
-  - Required header:
-    - `X-Actor-Id` must match the image owner.
-
-- GET `/api/v1/images/:id/logs`
-  Returns all action logs for the specified image.
+  - **Owner ONLY**: Required header `X-Actor-Id` must match the image owner.
 
 ### Face Records
 
-- GET `/api/v1/face_records`
+- `GET` `/api/v1/face_records`
   Returns all face records as JSON.
 
-- POST `/api/v1/face_records`
-  Creates a face record for an existing image.
+- `POST` `/api/v1/face_records`
+  Creates a face record for an existing image manually.
   - Request body:
     - `image_id`
-    - `cloak_type` (optional; defaults to the model behavior)
-  - Required header:
-    - `X-Actor-Id` must match the image owner.
+    - `cloak_type` (optional)
+  - **Owner ONLY**: Required header `X-Actor-Id` must match the image owner.
 
-- GET `/api/v1/face_records/:id`
+- `GET` `/api/v1/face_records/:id`
   Returns a single face record as JSON.
 
-- POST `/api/v1/face_records/:id/assignment`
+- `POST` `/api/v1/face_records/:id/assignment`
   Assigns a face record to a user.
   - Request body:
     - `assigned_user_id`
-  - Required header:
-    - `X-Actor-Id` must match the image owner.
+  - **Owner ONLY**: Required header `X-Actor-Id` must match the image owner.
+  - **Constraint**: Owner can only assign ONE record to themselves per image.
 
-- DELETE `/api/v1/face_records/:id/assignment`
+- `DELETE` `/api/v1/face_records/:id/assignment`
   Clears the assigned user from a face record and resets its effective cloak state to `blur`.
-  - Required header:
-    - `X-Actor-Id` must match the image owner.
+  - **Owner ONLY**: Required header `X-Actor-Id` must match the image owner.
 
-- POST `/api/v1/face_records/:id/respond`
+- `POST` `/api/v1/face_records/:id/respond`
   Updates the selected cloak type for the assigned user.
   - Request body:
     - `cloak_type`
-  - Required header:
-    - `X-Actor-Id` must match `assigned_user_id`.
+  - **Assignee ONLY**: Required header `X-Actor-Id` must match `assigned_user_id`.
 
 ### Action Logs
 
-- GET `/api/v1/images/:id/logs`
-  Returns all action logs for the specified image.
+- `GET` `/api/v1/images/:id/logs`
+  Returns all action logs for all faces belonging to the specified image.
+  - **Owner ONLY**: Required header `X-Actor-Id` must match the image owner.
 
-- GET `/api/v1/face_records/:id/logs`
+- `GET` `/api/v1/face_records/:id/logs`
   Returns all action logs for the specified face record.
+  - **Owner or Assignee ONLY**: Required header `X-Actor-Id` must match either the image owner or the record assignee.
 
 ## Install
 Clone the repo first:
@@ -117,10 +112,12 @@ Install this API by cloning the relevant branch and installing required gems fro
 bundle install
 ```
 
-Copy config/secrets-example.yml to config/secrets.yml and adjust as needed.
+Copy config/secrets-example.yml to config/secrets.yml and adjust as needed:
+```bash
+cp config/secrets-example.yml config/secrets.yml
+```
 
 Setup development database once:
-
 ```bash
 rake db:migrate
 ```
@@ -133,28 +130,23 @@ RACK_ENV=test rake db:migrate
 ```
 
 Run the test script:
-
 ```bash
 rake spec
 ```
 
 ## Run
-
 Run this API using:
-
 ```bash
 puma
 ```
 
 Or you can rerun the API using:
-
 ```bash
 rake rerun
 ```
 
 ## Release Check
 Before submitting pull requests, please check if specs, style, and dependency audits pass:
-
 ```bash
 rake release_check
 ```

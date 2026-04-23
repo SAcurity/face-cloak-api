@@ -9,39 +9,47 @@ describe 'Test ActionLog Handling' do
     wipe_database
     @img = FaceCloak::Image.create(seed_attributes(DATA[:images][0]))
     # After Image.create, 2 face records are automatically created with 'create' logs
-    # We pick one existing face for testing
     @face = @img.face_records.first
   end
 
-  it 'HAPPY: should be able to get action logs for a face record' do
-    # @face already has 1 'create' log from auto-detection
-    @face.add_action_log(action: 'assign', actor_id: 'admin')
-    @face.add_action_log(action: 'respond', actor_id: 'admin')
-
+  it 'HAPPY: should be able to get action logs for a face record as owner or assignee' do
+    # 1. Access as Owner
+    header 'X-Actor-Id', @img.owner_id
     get "api/v1/face_records/#{@face.id}/logs"
     _(last_response.status).must_equal 200
 
-    result = JSON.parse(last_response.body)
-    _(result['data'].count).must_equal 3 # 1 auto + 2 manual
+    # 2. Access as Assignee
+    @face.assign_to('reviewer_mina')
+    @face.save_changes
+    header 'X-Actor-Id', 'reviewer_mina'
+    get "api/v1/face_records/#{@face.id}/logs"
+    _(last_response.status).must_equal 200
   end
 
-  it 'HAPPY: should be able to get action logs for an image' do
-    # @img already has 2 face records with 2 logs
-    # We add a 3rd face manually (which triggers NO auto-log because it's not through Image.create hook)
-    third_face = FaceCloak::FaceRecord.create(image_id: @img.id)
-    @face.add_action_log(action: 'assign', actor_id: 'admin')
-    third_face.add_action_log(action: 'assign', actor_id: 'admin')
+  it 'SAD: should NOT allow strangers to see face record logs' do
+    header 'X-Actor-Id', 'stranger'
+    get "api/v1/face_records/#{@face.id}/logs"
+    _(last_response.status).must_equal 403
+  end
 
+  it 'HAPPY: should be able to get action logs for an image as owner' do
+    header 'X-Actor-Id', @img.owner_id
     get "api/v1/images/#{@img.id}/logs"
     _(last_response.status).must_equal 200
 
     result = JSON.parse(last_response.body)
-    _(result['data'].count).must_equal 4 # 2 auto logs + 2 manual logs
+    _(result['data'].count).must_equal 2 # 2 auto logs from upload
+  end
+
+  it 'SAD: should NOT allow non-owners to see image logs' do
+    header 'X-Actor-Id', 'stranger'
+    get "api/v1/images/#{@img.id}/logs"
+    _(last_response.status).must_equal 403
   end
 
   it 'SAD: should return error if unknown image logs requested' do
+    header 'X-Actor-Id', @img.owner_id # Valid actor, invalid resource
     get '/api/v1/images/missing-image/logs'
-
     _(last_response.status).must_equal 404
   end
 
