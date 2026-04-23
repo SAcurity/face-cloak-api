@@ -28,10 +28,14 @@ describe 'Test Image Handling' do
     img = FaceCloak::Image.create(seed_attributes(img_data))
 
     header 'X-Actor-Id', img.owner_id
-    get "api/v1/images/#{img.id}"
+    get "api/v1/images/#{img.id}/raw"
     _(last_response.status).must_equal 200
     _(last_response.headers['Content-Type']).must_include 'image'
     _(last_response.body).must_equal seed_binary
+
+    # Also verify default route is filtered for owner
+    get "api/v1/images/#{img.id}"
+    _(last_response.body).must_include 'PRIVACY_FILTERED_DATA'
   end
 
   it 'SAD: should return FILTERED data if non-owner requests image with unmasked faces' do
@@ -68,7 +72,7 @@ describe 'Test Image Handling' do
     _(result['data']['attributes']['file_data'].end_with?('.png')).must_equal true
 
     header 'X-Actor-Id', 'o1'
-    get "api/v1/images/#{id}"
+    get "api/v1/images/#{id}/raw"
     _(last_response.status).must_equal 200
     _(last_response.body).must_equal test_data
   ensure
