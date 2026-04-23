@@ -25,90 +25,136 @@ This project follows strict security hardening standards:
 
 ## Routes
 
-All routes return JSON except `GET /api/v1/images/[ID]`, which returns filtered/raw binary image content.
+All routes return JSON except `GET /api/v1/images/:id` and `GET /api/v1/images/:id/raw`, which return binary image content.
 
 ### Root
-- ```bash
-  GET /
-  ```
-  API metadata and resources.
+
+- GET `/`
+  Returns API metadata and resources.
 
 ### Images
-- ```bash
-  GET /api/v1/images
-  ```
-  List all image metadata.
-- ```bash
-  POST /api/v1/images
-  ```
-  Upload image (automatically triggers face detection).
-### Images
-- ```bash
-  GET /api/v1/images/:id
-  ```
-  Get image file (Privacy-First Default).
-  - **Everyone (including Owner)**: Returns raw binary ONLY if ALL faces are `unveil`.
-  - **Privacy Filter**: Otherwise returns `PRIVACY_FILTERED_DATA` with `X-Privacy-Filtered: true` header.
-- ```bash
-  GET /api/v1/images/:id/raw
-  ```
-  Get raw image file (Administrative Access).
-  - **Owner ONLY**: Returns **raw binary** regardless of face states.
-  - **Others**: Returns `403 Forbidden`.
-- ```bash
-  DELETE /api/v1/images/:id
-  ```
 
-  Delete image and all associated records.
+- GET `/api/v1/images`
+  Returns all image metadata as JSON.
+
+- POST `/api/v1/images`
+  Uploads an image and automatically triggers face detection.
+  - Request body:
+    - `owner_id`
+    - `file`
+
+- GET `/api/v1/images/:id`
+  Returns the default privacy-filtered image view.
+  - Raw binary is returned only when all face records are effectively `unveil`.
+  - Otherwise the API returns `PRIVACY_FILTERED_DATA_FOR_<image_id>` and sets `X-Privacy-Filtered: true`.
+
+- GET `/api/v1/images/:id/raw`
+  Returns the raw image binary regardless of face state.
+  - Required header:
+    - `X-Actor-Id` must match the image owner.
+
+- DELETE `/api/v1/images/:id`
+  Deletes an image and all associated face records and action logs.
+  - Required header:
+    - `X-Actor-Id` must match the image owner.
+
+- GET `/api/v1/images/:id/logs`
+  Returns all action logs for the specified image.
 
 ### Face Records
-- ```bash
-  GET /api/v1/face_records
-  ```
-  List all face records.
-- ```bash
-  POST /api/v1/face_records/:id/assignment
-  ```
-  Assign a face to a user (Owner only).
-- ```bash
-  DELETE /api/v1/face_records/:id/assignment
-  ```
-  Clear assignment (Owner only).
-- ```bash
-  POST /api/v1/face_records/:id/respond
-  ```
-  Set mask/unveil preference (Assignee only).
+
+- GET `/api/v1/face_records`
+  Returns all face records as JSON.
+
+- POST `/api/v1/face_records`
+  Creates a face record for an existing image.
+  - Request body:
+    - `image_id`
+    - `cloak_type` (optional; defaults to the model behavior)
+  - Required header:
+    - `X-Actor-Id` must match the image owner.
+
+- GET `/api/v1/face_records/:id`
+  Returns a single face record as JSON.
+
+- POST `/api/v1/face_records/:id/assignment`
+  Assigns a face record to a user.
+  - Request body:
+    - `assigned_user_id`
+  - Required header:
+    - `X-Actor-Id` must match the image owner.
+
+- DELETE `/api/v1/face_records/:id/assignment`
+  Clears the assigned user from a face record and resets its effective cloak state to `blur`.
+  - Required header:
+    - `X-Actor-Id` must match the image owner.
+
+- POST `/api/v1/face_records/:id/respond`
+  Updates the selected cloak type for the assigned user.
+  - Request body:
+    - `cloak_type`
+  - Required header:
+    - `X-Actor-Id` must match `assigned_user_id`.
 
 ### Action Logs
-- ```bash
-  GET /api/v1/images/:id/logs
-  ```
-  Audit logs for an image.
-- ```bash
-  GET /api/v1/face_records/:id/logs
-  ```
-  Audit logs for a specific face.
+
+- GET `/api/v1/images/:id/logs`
+  Returns all action logs for the specified image.
+
+- GET `/api/v1/face_records/:id/logs`
+  Returns all action logs for the specified face record.
 
 ## Install
-1. ```bash
-   bundle install
-   ```
-2. ```bash
-   cp config/secrets-example.yml config/secrets.yml
-   ```
-3. ```bash
-   rake db:migrate
-   ```
+Clone the repo first:
+```bash
+git clone <repository_url>
+cd face-cloak-api
+```
+
+Install this API by cloning the relevant branch and installing required gems from `Gemfile.lock`:
+
+```bash
+bundle install
+```
+
+Copy config/secrets-example.yml to config/secrets.yml and adjust as needed.
+
+Setup development database once:
+
+```bash
+rake db:migrate
+```
 
 ## Test
-- ```bash
-  RACK_ENV=test rake db:migrate
-  ```
-- ```bash
-  rake spec
-  ```
+Setup test database once:
 
-## Verification (Release Check)
+```bash
+RACK_ENV=test rake db:migrate
+```
+
+Run the test script:
+
+```bash
+rake spec
+```
+
+## Run
+
+Run this API using:
+
+```bash
+puma
+```
+
+Or you can rerun the API using:
+
+```bash
+rake rerun
+```
+
+## Release Check
+Before submitting pull requests, please check if specs, style, and dependency audits pass:
+
 ```bash
 rake release_check
 ```

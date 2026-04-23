@@ -46,7 +46,7 @@ module FaceCloak
         {
           app: 'face-cloak-api',
           version: 'v1',
-          resources: %w[images face_records action_logs]
+          resources: %w[images face_records]
         }.to_json
       end
 

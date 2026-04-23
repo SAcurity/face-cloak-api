@@ -8,7 +8,7 @@ This file provides guidance to Gemini CLI when working with code in this reposit
 
 The repo follows a branch-by-branch progression where each numbered branch introduces new functionality and a new security concern. Branches are merged weekly into `main`.
 
-- **Language/runtime:** Ruby 4.0.1
+- **Language/runtime:** Ruby 4.0.2
 - **Framework:** Roda
 - **ORM:** Sequel
 - **Database:** SQLite for development/test, Postgres-ready for production.
