@@ -5,14 +5,15 @@ require 'sequel'
 Sequel.migration do
   change do
     create_table(:images) do
-      String :id, primary_key: true
-      String :owner_id, null: false
+      uuid :id, primary_key: true
+      String :owner_id_secure, null: false
       String :file_name, null: false
-      String :file_data, null: false # Stores the generated local storage key
+      String :file_data, null: false
 
       DateTime :created_at
-    end
+      DateTime :updated_at
 
-    add_index :images, %i[owner_id file_name], unique: true, concurrently: false
+      unique [:owner_id_secure, :file_name]
+    end
   end
 end

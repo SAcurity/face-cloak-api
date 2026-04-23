@@ -11,29 +11,29 @@ The repo follows a branch-by-branch progression where each numbered branch intro
 - **Language/runtime:** Ruby 4.0.1
 - **Framework:** Roda
 - **ORM:** Sequel
-- **Database:** SQLite for development/test (production DB planned for a later branch)
+- **Database:** SQLite for development/test, Postgres-ready for production.
 - **Config/secrets:** Figaro (`config/secrets.yml`, gitignored)
-- **Crypto:** RbNaCl (introduced in a later branch)
+- **Crypto:** RbNaCl (SecureDB)
 - **Testing:** Minitest + minitest-rg + rack-test
 
 ## Commands
 
 - **Install dependencies:** `bundle install`
-- **Setup dev database (once):** `rake db:migrate`
-- **Setup test database (once):** `RACK_ENV=test rake db:migrate`
+- **Setup dev database:** `rake db:migrate`
+- **Setup test database:** `RACK_ENV=test rake db:migrate`
 - **Run server:** `puma`
 - **Run tests:** `rake spec`
 - **Lint:** `bundle exec rubocop .`
 - **Audit dependencies:** `rake audit`
 - **Full release check:** `rake release_check` (spec + style + audit)
-- **Console (Pry REPL with app loaded):** `rake console`
-- **Wipe database rows (keeps schema):** `rake db:delete`
-- **Drop local db file (refuses in production):** `rake db:drop`
+- **Console:** `rake console`
+- **Wipe database rows:** `rake db:delete`
+- **Drop local db file:** `rake db:drop`
+- **Rerun the server:** `rake rerun`
 
 ## Architecture
 
 ### Layout
-
 ```text
 .
 ├── Gemfile / Gemfile.lock
@@ -41,88 +41,72 @@ The repo follows a branch-by-branch progression where each numbered branch intro
 ├── require_app.rb          # autoloader for config / app/models / app/controllers
 ├── config.ru
 ├── config/
-│   ├── environments.rb     # Figaro + Sequel connection, ENV.delete('DATABASE_URL')
-│   ├── secrets.yml         # gitignored — real dev/test DB URLs
+│   ├── environments.rb     # Figaro + Sequel connection + Secret Hygiene
+│   ├── secrets.yml         # gitignored — real dev/test DB URLs and DB_KEY
 │   └── secrets-example.yml # committed template
 ├── app/
 │   ├── controllers/app.rb  # Roda routing tree
-│   └── models/             # Sequel::Model classes
+│   ├── lib/secure_db.rb    # RbNaCl encryption wrapper
+│   └── models/             # Sequel::Model classes (Image, FaceRecord, ActionLog)
 ├── db/
-│   ├── migrations/         # Sequel migrations (001_, 002_, ...)
+│   ├── migrations/         # Sequel migrations (UUID optimized)
 │   ├── seeds/              # YAML fixtures
-│   └── local/              # SQLite files (gitignored)
-└── spec/
-    ├── spec_helper.rb
-    ├── test_load_all.rb
-    ├── api_spec.rb
-    ├── env_spec.rb
-    ├── face_record_spec.rb
-    ├── image_spec.rb
-    ├── action_log_spec.rb
-    ├── action_type_spec.rb
-    └── cloak_type_spec.rb
+│   └── local/              # SQLite files and Image Storage
+└── spec/                   # Granular class-based tests
 ```
 
-### Module namespace
+### Routing & API Reference
 
-All app classes live under `FaceCloak`. The Roda app is `FaceCloak::Api`.
+REST routes are versioned under `api/v1/...` with strict RBAC:
 
-### Routing
+#### Root
+- GET `/` : API metadata and resources list
 
-REST routes are versioned under `api/v1/...` with nested resources:
+#### Images
+- GET `api/v1/images` : List all image metadata
+- POST `api/v1/images` : Upload image (Multipart: `owner_id`, `file`). Triggers **Automated Face Detection**.
+- GET `api/v1/images/[ID]` : Retrieve image binary. 
+    - **Privacy-First Default**: Returns raw binary ONLY if ALL faces are `unveil`; otherwise filtered. (Applied to everyone, including Owner).
+- GET `api/v1/images/[ID]/raw` : **Administrative Access**. 
+    - **Owner ONLY**: ALWAYS returns raw binary. 
+    - **Others**: Returns 403 Forbidden.
+- DELETE `api/v1/images/[ID]` : Deletes image and associated data (Owner only).
+- GET `api/v1/images/[ID]/logs` : Audit logs for all faces in this image.
 
-- GET `/` : root route shows if the Web API is running
-- GET `api/v1/face_records/` : returns all face records
-- GET `api/v1/face_records/[ID]` : returns details about a single face record with given ID
-- POST `api/v1/face_records/` : creates a new face record
-- POST `api/v1/face_records/[ID]/assignment` : assigns a face record to an assigned user ID
-- DELETE `api/v1/face_records/[ID]/assignment` : clears the assigned user from a face record and resets cloak state to default `blur`
-- POST `api/v1/face_records/[ID]/respond` : updates the selected cloak type for a face record
+#### Face Records
+- GET `api/v1/face_records` : List all face records.
+- GET `api/v1/face_records/[ID]` : Single record details.
+- POST `api/v1/face_records` : Manual creation (Owner only).
+- POST `api/v1/face_records/[ID]/assignment` : Assign face to a user (Owner only).
+- DELETE `api/v1/face_records/[ID]/assignment` : Clear assignment (Owner only).
+- POST `api/v1/face_records/[ID]/respond` : Set mask/unveil preference. 
+    - **Zero-Trust Rule**: ONLY the `assigned_user_id` can call this.
+- GET `api/v1/face_records/[ID]/logs` : Audit logs for a specific face.
 
-`images.id` and `face_records.id` are opaque generated strings rather than sequential integers, with resource prefixes such as `img_...` and `fac_...`.
-- DELETE `api/v1/images/[ID]` : deletes an image, its stored file, and dependent records; repeating the delete returns not found because the image is already gone
+### Data Standards
+- **Identifiers**: All Primary and Foreign keys (`id`, `image_id`, `face_record_id`) use **UUID v4** strings for security and PostgreSQL parity. `action_logs.id` uses Integer for ordering.
+- **Envelope**: Standard JSON API envelope `{ data: { type: "...", attributes: { ... } } }`.
 
-JSON response envelope:
+### Security Conventions (Hardening)
 
-```json
-{ "data": { "type": "...", "attributes": { ... } }, "included": { ... } }
-```
+#### 1. Zero-Trust Privacy
+- **Direct Access Prohibition**: NEVER return raw image data if faces are unassigned or masked.
+- **Permission Isolation**: Owner can manage distribution (Assign), but ONLY Assignee can authorize data viewing (Unveil).
 
-### Data store
+#### 2. Data Protection (PII)
+- **Encryption**: User identifiers (`owner_id`, `assigned_user_id`, `actor_id`) MUST be encrypted at rest using `SecureDB` (RbNaCl).
+- **Secret Hygiene**: Sensitive env vars (`DATABASE_URL`, `DB_KEY`) MUST be deleted from `ENV` immediately after usage in `environments.rb`.
 
-The app uses Sequel models for `Image`, `FaceRecord`, and `ActionLog`, connected with `one_to_many` / `many_to_one` associations. Deleting an `Image` also deletes its `FaceRecord` rows, removes the stored image file from `db/local/storage`, and deleting a `FaceRecord` also deletes its `ActionLog` rows via `plugin :association_dependencies`. Uploaded image binary data is persisted to local storage, while `images.file_data` stores the generated storage key. The shared database handle lives on `FaceCloak::Api.DB`.
-For uploaded image names, uniqueness is scoped per owner. If the same owner uploads the same `file_name` again, the app auto-suffixes the later record name (for example `photo-1.png`), while different owners may reuse the same original name.
+#### 3. Database Integrity
+- **Migrations**: Use explicit `uuid` types or `String :id, primary_key: true` to avoid SQLite integer mapping conflicts.
+- **SQL Injection**: All queries MUST use Sequel's parameterized DSL.
+- **Mass Assignment**: Models MUST use `whitelist_security` to restrict allowed columns.
 
-### Environments
+#### 4. Audit & Traceability
+- Every state-changing action (create, assign, unassign, respond) MUST generate an `ActionLog` entry.
+- Centralized Error Handler: Classified logging (WARN for 400s, ERROR for 500s) without leaking stack traces to clients.
 
-`ENV['RACK_ENV']` drives everything (`development` / `test` / `production`). `spec/spec_helper.rb` sets `RACK_ENV=test` as the very first statement. Figaro reads `config/secrets.yml` per environment; production reads from real host env vars.
-
-### Test conventions
-
-- Minitest with `minitest-rg` colored output and `rack-test` HTTP helpers
-- `spec/spec_helper.rb` defines `wipe_database` and loads seed YAML into a `DATA` hash
-- Each resource spec wipes the DB in a `before` block
-- Tests are labeled `HAPPY:` (valid input, expected path) / `SAD:` (bad input, error path) / `BAD:` (something breaks)
-- `spec/env_spec.rb` is the regression test that secret env vars are not exposed through `FaceCloak::Api.config`
-
-## Style
-
-RuboCop with `rubocop-minitest`, `rubocop-performance`, `rubocop-rake`, `rubocop-sequel` plugins. Target Ruby version 4.0. New cops enabled.
-
-- `Metrics/BlockLength` excluded for `app/controllers/*.rb`, `spec/**/*`, `Rakefile`
-- `Security/YAMLLoad` enforced outside `spec/**/*`
-- `Style/HashSyntax` / `Style/SymbolArray` excluded for `Rakefile` and `db/migrations/*.rb`
-- All documentation markdown files must be kept lint-free (no trailing whitespace, consistent heading levels, blank lines around blocks, etc.)
-
-## Security conventions (project-wide)
-
-These rules apply to every branch; violations should be flagged in review.
-
-- **Never commit `config/secrets.yml`.** It is gitignored. Use `config/secrets-example.yml` as the committed template.
-- **Never touch `config/secrets.yml` from automation** — it holds the real local DB URL (and, in later branches, real crypto keys).
-- **Secrets never live in `ENV` longer than necessary.** `config/environments.rb` reads sensitive vars via `ENV.delete(...)` so downstream gems and subprocesses cannot see them. `spec/env_spec.rb` guards this contract.
-- **All SQL must go through Sequel.** No string-concatenated queries.
-- **YAML loading must use `YAML.safe_load_file`.** If a fixture legitimately needs a non-primitive class, allowlist it explicitly via `permitted_classes:`.
-- **`rake release_check` must stay green before merging any branch to `main`.** It runs spec + style + audit; a failing audit blocks release.
-- **Never run `git add` / `git commit` in this repo without explicit approval.**
-- **Respect branch scope.** Features and security concerns that belong to later branches per the project rules must not creep into the current one.
+## Style & Verification
+- RuboCop: Follow idiomatic Ruby. Targets version 4.0. No offenses allowed.
+- Tests: Every security rule must have a verified "Sad Path" test case.
+- `rake release_check`: Mandatory green status before merging to main.

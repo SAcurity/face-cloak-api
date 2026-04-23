@@ -22,5 +22,7 @@ DATA[:face_records] = YAML.safe_load_file('db/seeds/face_record_seeds.yml')
 DATA[:action_logs] = YAML.safe_load_file('db/seeds/action_log_seeds.yml')
 
 def seed_attributes(record)
-  record.except('id')
+  record.dup.tap do |h|
+    %w[id created_at updated_at assigned_at responded_at].each { |k| h.delete(k) }
+  end
 end

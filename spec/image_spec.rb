@@ -27,10 +27,21 @@ describe 'Test Image Handling' do
     seed_binary = Base64.decode64(img_data['file_data'])
     img = FaceCloak::Image.create(seed_attributes(img_data))
 
+    header 'X-Actor-Id', img.owner_id
     get "api/v1/images/#{img.id}"
     _(last_response.status).must_equal 200
     _(last_response.headers['Content-Type']).must_include 'image'
     _(last_response.body).must_equal seed_binary
+  end
+
+  it 'SAD: should return FILTERED data if non-owner requests image with unmasked faces' do
+    img_data = DATA[:images][0]
+    img = FaceCloak::Image.create(seed_attributes(img_data))
+
+    header 'X-Actor-Id', 'not-the-owner'
+    get "api/v1/images/#{img.id}"
+    _(last_response.status).must_equal 200
+    _(last_response.body).must_include 'PRIVACY_FILTERED_DATA'
   end
 
   it 'SAD: should return error if unknown image requested' do
@@ -55,6 +66,8 @@ describe 'Test Image Handling' do
     id = result['data']['attributes']['id']
     _(result['data']['attributes']['file_name']).must_equal expected_name
     _(result['data']['attributes']['file_data'].end_with?('.png')).must_equal true
+
+    header 'X-Actor-Id', 'o1'
     get "api/v1/images/#{id}"
     _(last_response.status).must_equal 200
     _(last_response.body).must_equal test_data

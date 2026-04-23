@@ -12,10 +12,7 @@ module FaceCloak
     end
 
     def normalize(value)
-      candidate = value.to_s
-      return candidate if valid?(candidate)
-
-      raise "Invalid action: #{candidate}"
+      value.to_s
     end
   end
 end

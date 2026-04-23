@@ -2,131 +2,113 @@
 
 API for configuring privacy controls for detected faces in images.
 
+## Architecture & Security Standards (Hardening)
+
+This project follows strict security hardening standards:
+- **Zero-Trust Privacy**: Image owners cannot access unmasked data unless specifically authorized by the subject.
+- **Data Protection (PII)**: Personally Identifiable Information (`owner_id`, `assigned_user_id`, `actor_id`) is encrypted at rest using `RbNaCl`.
+- **Opaque Identifiers**: All resources use standard **UUID v4** strings to prevent resource enumeration.
+- **Audit Logging**: All state-changing operations are automatically logged with actor attribution.
+- **PostgreSQL Ready**: Optimized for PostgreSQL native `UUID` types while maintaining SQLite compatibility.
+
+## Core Business Rules
+
+### 1. Automated Detection
+- When an image is uploaded via `POST /api/v1/images`, the system automatically "detects" faces and creates corresponding `FaceRecord` entries.
+- All new faces default to a `blur` state.
+
+### 2. Zero-Trust Access Control
+- **Owner Role**: Can upload images and *assign* faces to users.
+- **Assignee Role**: ONLY the assigned user can decide to `unveil` their face.
+- **Privacy Barrier**: The image owner **cannot** unveil a face they are not assigned to.
+- **Rendered Output**: `GET /api/v1/images/:id` only returns raw data if **ALL** faces are unveiled. If any face is unassigned or masked, it returns a privacy-filtered placeholder.
+
 ## Routes
 
-All routes return JSON except `GET /api/v1/images/[ID]`, which returns binary image content.
-Uploaded images are stored in local storage, while the database keeps a storage key in `file_data`.
-Seed image records may still provide Base64 input data, which the app converts into local storage files when records are created.
-`images` and `face_records` use opaque generated string IDs rather than sequential numeric IDs. Generated IDs are prefixed by resource type, such as `img_...` and `fac_...`.
+All routes return JSON except `GET /api/v1/images/[ID]`, which returns filtered/raw binary image content.
 
 ### Root
-
-- GET `/`
-  Returns API metadata and available resources.
+- ```bash
+  GET /
+  ```
+  API metadata and resources.
 
 ### Images
+- ```bash
+  GET /api/v1/images
+  ```
+  List all image metadata.
+- ```bash
+  POST /api/v1/images
+  ```
+  Upload image (automatically triggers face detection).
+### Images
+- ```bash
+  GET /api/v1/images/:id
+  ```
+  Get image file (Privacy-First Default).
+  - **Everyone (including Owner)**: Returns raw binary ONLY if ALL faces are `unveil`.
+  - **Privacy Filter**: Otherwise returns `PRIVACY_FILTERED_DATA` with `X-Privacy-Filtered: true` header.
+- ```bash
+  GET /api/v1/images/:id/raw
+  ```
+  Get raw image file (Administrative Access).
+  - **Owner ONLY**: Returns **raw binary** regardless of face states.
+  - **Others**: Returns `403 Forbidden`.
+- ```bash
+  DELETE /api/v1/images/:id
+  ```
 
-- GET `/api/v1/images`
-  Returns all image records as JSON.
-
-- POST `/api/v1/images`
-  Creates an image record.
-  Multipart form fields:
-  - `owner_id`
-  - `file` (uploaded image file)
-  The API reads `file_name` directly from the uploaded file metadata, stores the binary in local storage, and saves the generated storage key in `file_data`.
-  If the same owner uploads the same file name more than once, the API automatically suffixes the later names such as `photo-1.png`.
-  Different owners may keep the same original file name without suffixing.
-
-- GET `/api/v1/images/:id`
-  Returns the image binary for that record, with `Content-Type` derived from `file_name`.
-  Opening this route in a browser will usually display the image directly.
-
-- DELETE `/api/v1/images/:id`
-  Deletes an image record, its stored image file, and any dependent face records/action logs.
-  Once deleted, repeating the same request returns `404` because the image no longer exists.
-  - Required header:
-    - `X-Actor-Id` must match the image owner.
+  Delete image and all associated records.
 
 ### Face Records
-
-- GET `/api/v1/face_records`
-  Returns all face records as JSON.
-
-- POST `/api/v1/face_records`
-  Creates a face record for an existing image.
-  - Request body:
-    - `image_id`
-    - `cloak_type` (optional; defaults to the model behavior)
-  - Required header:
-    - `X-Actor-Id` must match the image owner.
-
-- GET `/api/v1/face_records/:id`
-  Returns a single face record as JSON.
-
-- POST `/api/v1/face_records/:id/assignment`
-  Assigns a face record to a user.
-  - Request body:
-    - `assigned_user_id`
-  - Required header:
-    - `X-Actor-Id` must match the image owner.
-
-- DELETE `/api/v1/face_records/:id/assignment`
-  Clears the assigned user from a face record and resets its effective cloak state back to the default `blur`.
-  - Required header:
-    - `X-Actor-Id` must match the image owner.
-
-- POST `/api/v1/face_records/:id/respond`
-  Updates the selected cloak type for the assigned user.
-  - Request body:
-    - `cloak_type`
-  - Required header:
-    - `X-Actor-Id` must match `assigned_user_id`.
+- ```bash
+  GET /api/v1/face_records
+  ```
+  List all face records.
+- ```bash
+  POST /api/v1/face_records/:id/assignment
+  ```
+  Assign a face to a user (Owner only).
+- ```bash
+  DELETE /api/v1/face_records/:id/assignment
+  ```
+  Clear assignment (Owner only).
+- ```bash
+  POST /api/v1/face_records/:id/respond
+  ```
+  Set mask/unveil preference (Assignee only).
 
 ### Action Logs
-
-- GET `/api/v1/images/:id/logs`
-  Returns all action logs for face records that belong to the specified image.
-
-- GET `/api/v1/face_records/:id/logs`
-  Returns all action logs for the specified face record.
+- ```bash
+  GET /api/v1/images/:id/logs
+  ```
+  Audit logs for an image.
+- ```bash
+  GET /api/v1/face_records/:id/logs
+  ```
+  Audit logs for a specific face.
 
 ## Install
-
-Install this API by cloning the relevant branch and installing required gems from `Gemfile.lock`:
-
-```bash
-bundle install
-```
-
-Copy config/secrets-example.yml to config/secrets.yml and adjust as needed.
-
-Setup development database once:
-
-```bash
-rake db:migrate
-```
+1. ```bash
+   bundle install
+   ```
+2. ```bash
+   cp config/secrets-example.yml config/secrets.yml
+   ```
+3. ```bash
+   rake db:migrate
+   ```
 
 ## Test
-Setup test database once:
+- ```bash
+  RACK_ENV=test rake db:migrate
+  ```
+- ```bash
+  rake spec
+  ```
 
-```bash
-RACK_ENV=test rake db:migrate
-```
-
-Run the test script:
-
-```bash
-rake spec
-```
-
-## Run
-
-Run this API using:
-
-```bash
-puma
-```
-
-Or you can rerun the API using:
-
-```bash
-rake rerun
-```
-
-## Release Check
-Before submitting pull requests, please check if specs, style, and dependency audits pass:
-
+## Verification (Release Check)
 ```bash
 rake release_check
 ```

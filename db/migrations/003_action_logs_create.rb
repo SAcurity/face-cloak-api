@@ -6,9 +6,9 @@ Sequel.migration do
   change do
     create_table(:action_logs) do
       primary_key :id
-      foreign_key :face_record_id, :face_records, type: String, null: false
-      String :actor_id, null: false
-      String :action, null: false # e.g., 'create', 'assign', 'unassign', 'respond'
+      foreign_key :face_record_id, :face_records, type: :uuid, null: false
+      String :actor_id_secure, null: false
+      String :action, null: false
 
       DateTime :created_at
     end

@@ -15,9 +15,8 @@ module FaceCloak
     def normalize(value)
       candidate = value.to_s
       return DEFAULT if candidate.empty?
-      return candidate if valid?(candidate)
 
-      raise "Invalid cloak_type: #{candidate}"
+      candidate
     end
   end
 end

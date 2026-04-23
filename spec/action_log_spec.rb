@@ -8,30 +8,35 @@ describe 'Test ActionLog Handling' do
   before do
     wipe_database
     @img = FaceCloak::Image.create(seed_attributes(DATA[:images][0]))
-    @face = FaceCloak::FaceRecord.create(image_id: @img.id)
+    # After Image.create, 2 face records are automatically created with 'create' logs
+    # We pick one existing face for testing
+    @face = @img.face_records.first
   end
 
   it 'HAPPY: should be able to get action logs for a face record' do
-    @face.add_action_log(action: 'create', actor_id: 'admin')
+    # @face already has 1 'create' log from auto-detection
     @face.add_action_log(action: 'assign', actor_id: 'admin')
+    @face.add_action_log(action: 'respond', actor_id: 'admin')
 
     get "api/v1/face_records/#{@face.id}/logs"
     _(last_response.status).must_equal 200
 
     result = JSON.parse(last_response.body)
-    _(result['data'].count).must_equal 2
+    _(result['data'].count).must_equal 3 # 1 auto + 2 manual
   end
 
   it 'HAPPY: should be able to get action logs for an image' do
-    second_face = FaceCloak::FaceRecord.create(image_id: @img.id)
-    @face.add_action_log(action: 'create', actor_id: 'admin')
-    second_face.add_action_log(action: 'assign', actor_id: 'admin')
+    # @img already has 2 face records with 2 logs
+    # We add a 3rd face manually (which triggers NO auto-log because it's not through Image.create hook)
+    third_face = FaceCloak::FaceRecord.create(image_id: @img.id)
+    @face.add_action_log(action: 'assign', actor_id: 'admin')
+    third_face.add_action_log(action: 'assign', actor_id: 'admin')
 
     get "api/v1/images/#{@img.id}/logs"
     _(last_response.status).must_equal 200
 
     result = JSON.parse(last_response.body)
-    _(result['data'].count).must_equal 2
+    _(result['data'].count).must_equal 4 # 2 auto logs + 2 manual logs
   end
 
   it 'SAD: should return error if unknown image logs requested' do

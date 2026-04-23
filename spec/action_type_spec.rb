@@ -16,8 +16,4 @@ describe 'Test ActionType Module' do
   it 'HAPPY: should normalize valid actions' do
     _(FaceCloak::ActionType.normalize('respond')).must_equal 'respond'
   end
-
-  it 'SAD: should raise error for normalizing invalid actions' do
-    _(proc { FaceCloak::ActionType.normalize('invalid') }).must_raise RuntimeError
-  end
 end

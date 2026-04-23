@@ -18,7 +18,7 @@ describe 'Test FaceRecord Handling' do
     _(last_response.status).must_equal 200
 
     result = JSON.parse(last_response.body)
-    _(result['data'].count).must_equal 2
+    _(result['data'].count).must_equal 4 # 2 from seeds + 2 auto-generated per image
   end
 
   it 'HAPPY: should be able to get details of a single face record' do
@@ -67,14 +67,26 @@ describe 'Test FaceRecord Handling' do
     _(last_response.status).must_equal 403
   end
 
+  it 'SAD: should NOT allow owner to assign more than ONE face to themselves' do
+    # Image has 2 auto-generated faces
+    faces = @img.face_records
+
+    # First self-assignment: OK
+    header 'X-Actor-Id', @img.owner_id
+    post "api/v1/face_records/#{faces[0].id}/assignment", { assigned_user_id: @img.owner_id }.to_json
+    _(last_response.status).must_equal 201
+
+    # Second self-assignment: Forbidden
+    post "api/v1/face_records/#{faces[1].id}/assignment", { assigned_user_id: @img.owner_id }.to_json
+    _(last_response.status).must_equal 403
+    _(JSON.parse(last_response.body)['message']).must_include 'only assign one face to yourself'
+  end
+
   it 'HAPPY: should be able to unassign a face record as owner' do
-    face = FaceCloak::FaceRecord.create(
-      image_id: @img.id,
-      assigned_user_id: 'new_user',
-      assigned_at: FaceCloak::FaceRecord.timestamp,
-      responded_at: FaceCloak::FaceRecord.timestamp,
-      cloak_type: 'comic'
-    )
+    face = FaceCloak::FaceRecord.create(image_id: @img.id)
+    face.assign_to('new_user')
+    face.respond_with('comic')
+    face.save_changes
 
     header 'X-Actor-Id', @img.owner_id
     delete "api/v1/face_records/#{face.id}/assignment"
@@ -88,11 +100,9 @@ describe 'Test FaceRecord Handling' do
   end
 
   it 'SAD: should NOT be able to unassign a face record if not owner' do
-    face = FaceCloak::FaceRecord.create(
-      image_id: @img.id,
-      assigned_user_id: 'new_user',
-      assigned_at: FaceCloak::FaceRecord.timestamp
-    )
+    face = FaceCloak::FaceRecord.create(image_id: @img.id)
+    face.assign_to('new_user')
+    face.save_changes
 
     header 'X-Actor-Id', 'stranger'
     delete "api/v1/face_records/#{face.id}/assignment"
@@ -111,11 +121,9 @@ describe 'Test FaceRecord Handling' do
   end
 
   it 'SAD: should NOT be able to unassign the same face record twice' do
-    face = FaceCloak::FaceRecord.create(
-      image_id: @img.id,
-      assigned_user_id: 'new_user',
-      assigned_at: FaceCloak::FaceRecord.timestamp
-    )
+    face = FaceCloak::FaceRecord.create(image_id: @img.id)
+    face.assign_to('new_user')
+    face.save_changes
 
     header 'X-Actor-Id', @img.owner_id
     delete "api/v1/face_records/#{face.id}/assignment"
@@ -130,7 +138,10 @@ describe 'Test FaceRecord Handling' do
   end
 
   it 'HAPPY: should be able to respond to a face record as assignee' do
-    face = FaceCloak::FaceRecord.create(image_id: @img.id, assigned_user_id: 'reviewer_mina')
+    face = FaceCloak::FaceRecord.create(image_id: @img.id)
+    face.assign_to('reviewer_mina')
+    face.save_changes
+
     respond_data = { cloak_type: 'sunglasses' }
 
     header 'X-Actor-Id', 'reviewer_mina'
@@ -139,12 +150,24 @@ describe 'Test FaceRecord Handling' do
   end
 
   it 'SAD: should NOT be able to respond to a face record if not assignee' do
-    face = FaceCloak::FaceRecord.create(image_id: @img.id, assigned_user_id: 'reviewer_mina')
+    face = FaceCloak::FaceRecord.create(image_id: @img.id)
+    face.assign_to('reviewer_mina')
+    face.save_changes
+
     respond_data = { cloak_type: 'sunglasses' }
 
     header 'X-Actor-Id', 'stranger'
     post "api/v1/face_records/#{face.id}/respond", respond_data.to_json
     _(last_response.status).must_equal 403
+  end
+
+  it 'SAD: should NOT allow image owner to respond if NOT assigned (Zero-Trust)' do
+    face = FaceCloak::FaceRecord.create(image_id: @img.id)
+    # Even though actor is the image owner, they are NOT the record assignee
+    header 'X-Actor-ID', @img.owner_id
+    post "/api/v1/face_records/#{face.id}/respond", { cloak_type: 'unveil' }.to_json
+    _(last_response.status).must_equal 403
+    _(JSON.parse(last_response.body)['message']).must_include 'not assigned'
   end
 
   it 'HAPPY: should correctly normalize cloak types (Model Unit Test)' do
@@ -161,7 +184,10 @@ describe 'Test FaceRecord Handling' do
   end
 
   it 'SAD: should reject invalid cloak types on respond' do
-    face = FaceCloak::FaceRecord.create(image_id: @img.id, assigned_user_id: 'reviewer_mina')
+    face = FaceCloak::FaceRecord.create(image_id: @img.id)
+    face.assign_to('reviewer_mina')
+    face.save_changes
+
     respond_data = { cloak_type: 'comics' }
 
     header 'X-Actor-Id', 'reviewer_mina'
@@ -183,7 +209,7 @@ describe 'Test FaceRecord Handling' do
     face = FaceCloak::FaceRecord.create(image_id: @img.id)
     face.assign_to('user_1')
     face.respond_with('comic')
-    face.unassign
+    face.clear_assignment
 
     _(face.assigned_user_id).must_be_nil
     _(face.assigned_at).must_be_nil
