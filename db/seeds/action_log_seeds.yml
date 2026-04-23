@@ -1,26 +1,16 @@
 ---
-- id: 1
-  face_record_id: 'fac_fR3kT8mQ2v'
+- face_record_id: 'mountain_view.png_null'
   actor_id: 'photographer_alina'
   action: 'create'
-  created_at: '2026-04-09 09:10:00 +08:00'
-- id: 2
-  face_record_id: 'fac_cY5pN1xJ7w'
+- face_record_id: 'mountain_view.png_reviewer_mina'
   actor_id: 'photographer_alina'
   action: 'create'
-  created_at: '2026-04-09 10:00:00 +08:00'
-- id: 3
-  face_record_id: 'fac_cY5pN1xJ7w'
+- face_record_id: 'mountain_view.png_reviewer_mina'
   actor_id: 'photographer_alina'
   action: 'assign'
-  created_at: '2026-04-09 10:30:00 +08:00'
-- id: 4
-  face_record_id: 'fac_qB8sL4dH6n'
+- face_record_id: 'city_street.png_reviewer_derek'
   actor_id: 'photographer_alina'
   action: 'create'
-  created_at: '2026-04-09 11:30:00 +08:00'
-- id: 5
-  face_record_id: 'fac_qB8sL4dH6n'
+- face_record_id: 'city_street.png_reviewer_derek'
   actor_id: 'photographer_alina'
   action: 'assign'
-  created_at: '2026-04-09 12:00:00 +08:00'

@@ -5,20 +5,31 @@ require 'sequel'
 require 'base64'
 require 'fileutils'
 require 'securerandom'
-require_relative 'id_generator'
 
 module FaceCloak
   # Represents an image that can contain multiple face records.
   class Image < Sequel::Model
     STORAGE_DIR = 'db/local/storage'
 
+    unrestrict_primary_key
     one_to_many :face_records
     plugin :association_dependencies, face_records: :destroy
 
     plugin :timestamps
+    plugin :whitelist_security
+    set_allowed_columns :owner_id, :file_name, :file_data
+
+    # Secure getters and setters
+    def owner_id
+      SecureDB.decrypt(owner_id_secure)
+    end
+
+    def owner_id=(plaintext)
+      self.owner_id_secure = SecureDB.encrypt(plaintext)
+    end
 
     def before_create
-      self.id ||= IdGenerator.next_id(prefix: 'img')
+      self.id = SecureRandom.uuid
       ensure_unique_file_name!
       persist_incoming_file_data!
       super
@@ -32,6 +43,21 @@ module FaceCloak
     def before_destroy
       delete_stored_file!
       super
+    end
+
+    def after_create
+      super
+      detect_faces
+    end
+
+    # Simulates automated face detection
+    def detect_faces
+      # Create 2 mock face records for every image automatically
+      2.times do
+        face = add_face_record(cloak_type: 'blur')
+        # Audit: Log the automatic detection as being triggered by the image owner
+        face.add_action_log(action: 'create', actor_id: owner_id)
+      end
     end
 
     # Generates a secure random filename and saves binary data
@@ -69,14 +95,19 @@ module FaceCloak
     def ensure_unique_file_name!
       return if owner_id.to_s.empty? || file_name.to_s.empty?
 
-      original_name = file_name
-      ext = File.extname(original_name)
-      stem = File.basename(original_name, ext)
+      ext = File.extname(file_name)
+      stem = File.basename(file_name, ext)
       suffix = 1
 
-      while self.class.where(owner_id:, file_name:).first
+      while duplicate_file_name?
         self.file_name = "#{stem}-#{suffix}#{ext}"
         suffix += 1
+      end
+    end
+
+    def duplicate_file_name?
+      self.class.all.any? do |img|
+        img.owner_id == owner_id && img.file_name == file_name && img.id != id
       end
     end
 

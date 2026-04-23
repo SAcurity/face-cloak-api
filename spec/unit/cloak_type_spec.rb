@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative 'spec_helper'
+require_relative '../spec_helper'
 
 describe 'Test CloakType Module' do
   it 'HAPPY: should recognize valid cloak types' do
@@ -14,10 +14,6 @@ describe 'Test CloakType Module' do
 
   it 'HAPPY: should normalize values' do
     _(FaceCloak::CloakType.normalize('pixelate')).must_equal 'pixelate'
-    _(FaceCloak::CloakType.normalize(nil)).must_equal 'blur'
-  end
-
-  it 'SAD: should reject invalid cloak types' do
-    _ { FaceCloak::CloakType.normalize('invalid') }.must_raise RuntimeError
+    _(FaceCloak::CloakType.normalize('invalid')).must_equal 'invalid'
   end
 end

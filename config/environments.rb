@@ -2,7 +2,9 @@
 
 require 'roda'
 require 'figaro'
+require 'logger'
 require 'sequel'
+require './app/lib/secure_db'
 
 module FaceCloak
   # Configuration for the API
@@ -23,6 +25,14 @@ module FaceCloak
     db_url = ENV.delete('DATABASE_URL')
     DB = Sequel.connect("#{db_url}?encoding=utf8")
     def self.DB = DB # rubocop:disable Naming/MethodName
+
+    # Setup logger
+    LOGGER = Logger.new($stderr)
+    def self.logger = LOGGER
+
+    # Setup SecureDB
+    db_key = ENV.delete('DB_KEY')
+    SecureDB.setup(db_key)
 
     configure :development, :production do
       plugin :common_logger, $stderr

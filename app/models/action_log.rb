@@ -8,6 +8,17 @@ module FaceCloak
   class ActionLog < Sequel::Model
     many_to_one :face_record
     plugin :timestamps, update_on_create: true
+    plugin :whitelist_security
+    set_allowed_columns :face_record_id, :actor_id, :action
+
+    # Secure getters and setters
+    def actor_id
+      SecureDB.decrypt(actor_id_secure)
+    end
+
+    def actor_id=(plaintext)
+      self.actor_id_secure = SecureDB.encrypt(plaintext)
+    end
 
     def validate
       super

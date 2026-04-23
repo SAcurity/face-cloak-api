@@ -2,25 +2,39 @@
 
 require 'json'
 require 'sequel'
-require_relative 'id_generator'
+require 'securerandom'
 
 module FaceCloak
   # Represents one detected face and its masking lifecycle.
   class FaceRecord < Sequel::Model
+    unrestrict_primary_key
     many_to_one :image
     one_to_many :action_logs
     plugin :association_dependencies, action_logs: :destroy
 
     plugin :timestamps, update_on_create: true
+    plugin :whitelist_security
+    set_allowed_columns :image_id, :assigned_user_id, :cloak_type
+
+    # Secure getters and setters
+    def assigned_user_id
+      SecureDB.decrypt(assigned_user_id_secure)
+    end
+
+    def assigned_user_id=(plaintext)
+      self.assigned_user_id_secure = SecureDB.encrypt(plaintext)
+    end
 
     def before_create
-      self.id ||= IdGenerator.next_id(prefix: 'fac')
+      self.id = SecureRandom.uuid
       super
     end
 
     def validate
       super
-      self.cloak_type = CloakType.normalize(cloak_type)
+      return unless cloak_type && !CloakType.valid?(cloak_type)
+
+      errors.add(:cloak_type, "must be one of #{CloakType::OPTIONS.join(', ')}")
     end
 
     def assign_to(user_id, at: self.class.timestamp)
@@ -33,7 +47,7 @@ module FaceCloak
       !assigned_user_id.nil? && !assigned_user_id.empty?
     end
 
-    def unassign
+    def clear_assignment
       raise 'Face record is not assigned' unless assigned?
 
       self.assigned_user_id = nil

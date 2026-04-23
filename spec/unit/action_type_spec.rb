@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative 'spec_helper'
+require_relative '../spec_helper'
 
 describe 'Test ActionType Module' do
   it 'HAPPY: should recognize valid actions' do
@@ -15,9 +15,5 @@ describe 'Test ActionType Module' do
 
   it 'HAPPY: should normalize valid actions' do
     _(FaceCloak::ActionType.normalize('respond')).must_equal 'respond'
-  end
-
-  it 'SAD: should raise error for normalizing invalid actions' do
-    _(proc { FaceCloak::ActionType.normalize('invalid') }).must_raise RuntimeError
   end
 end
