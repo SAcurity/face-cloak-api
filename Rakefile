@@ -12,7 +12,7 @@ task default: :spec
 # spec tasks
 desc 'Tests API specs only'
 task :api_spec do
-  sh 'ruby spec/api_spec.rb'
+  sh 'ruby spec/integration/api_spec.rb'
 end
 
 desc 'Run all specs'

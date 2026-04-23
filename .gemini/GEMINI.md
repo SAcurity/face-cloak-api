@@ -53,6 +53,11 @@ The repo follows a branch-by-branch progression where each numbered branch intro
 │   ├── seeds/              # YAML fixtures
 │   └── local/              # SQLite files and Image Storage
 └── spec/                   # Granular class-based tests
+    ├── integration/  
+    ├── unit/ 
+    ├── env_spec.rb
+    ├── spec_helper.rb
+    └── test_load_all.rb
 ```
 
 ### Routing & API Reference

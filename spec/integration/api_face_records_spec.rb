@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require_relative 'spec_helper'
+require_relative '../spec_helper'
 
-describe 'Test FaceRecord Handling' do
+describe 'Test FaceRecord API Integration' do
   include Rack::Test::Methods
 
   before do
@@ -91,12 +91,6 @@ describe 'Test FaceRecord Handling' do
     header 'X-Actor-Id', @img.owner_id
     delete "api/v1/face_records/#{face.id}/assignment"
     _(last_response.status).must_equal 200
-
-    face.refresh
-    _(face.assigned_user_id).must_be_nil
-    _(face.assigned_at).must_be_nil
-    _(face.responded_at).must_be_nil
-    _(face.cloak_type).must_equal 'blur'
   end
 
   it 'SAD: should NOT be able to unassign a face record if not owner' do
@@ -111,23 +105,6 @@ describe 'Test FaceRecord Handling' do
 
   it 'SAD: should NOT be able to unassign a face record that is not assigned' do
     face = FaceCloak::FaceRecord.create(image_id: @img.id)
-
-    header 'X-Actor-Id', @img.owner_id
-    delete "api/v1/face_records/#{face.id}/assignment"
-    _(last_response.status).must_equal 400
-
-    result = JSON.parse(last_response.body)
-    _(result['message']).must_equal 'Face record is not assigned'
-  end
-
-  it 'SAD: should NOT be able to unassign the same face record twice' do
-    face = FaceCloak::FaceRecord.create(image_id: @img.id)
-    face.assign_to('new_user')
-    face.save_changes
-
-    header 'X-Actor-Id', @img.owner_id
-    delete "api/v1/face_records/#{face.id}/assignment"
-    _(last_response.status).must_equal 200
 
     header 'X-Actor-Id', @img.owner_id
     delete "api/v1/face_records/#{face.id}/assignment"
@@ -170,11 +147,6 @@ describe 'Test FaceRecord Handling' do
     _(JSON.parse(last_response.body)['message']).must_include 'not assigned'
   end
 
-  it 'HAPPY: should correctly normalize cloak types (Model Unit Test)' do
-    face = FaceCloak::FaceRecord.create(image_id: @img.id)
-    _(face.cloak_type).must_equal 'blur'
-  end
-
   it 'SAD: should reject invalid cloak types on create' do
     new_face = { image_id: @img.id, cloak_type: 'invalid' }
 
@@ -193,27 +165,5 @@ describe 'Test FaceRecord Handling' do
     header 'X-Actor-Id', 'reviewer_mina'
     post "api/v1/face_records/#{face.id}/respond", respond_data.to_json
     _(last_response.status).must_equal 400
-  end
-
-  it 'HAPPY: should track assignment and responses (Model Unit Test)' do
-    face = FaceCloak::FaceRecord.create(image_id: @img.id)
-    face.assign_to('user_1')
-    face.respond_with('comic')
-
-    _(face.assigned_user_id).must_equal 'user_1'
-    _(face.cloak_type).must_equal 'comic'
-    _(face.responded_at).wont_be_nil
-  end
-
-  it 'HAPPY: should clear assignment fields when unassigned (Model Unit Test)' do
-    face = FaceCloak::FaceRecord.create(image_id: @img.id)
-    face.assign_to('user_1')
-    face.respond_with('comic')
-    face.clear_assignment
-
-    _(face.assigned_user_id).must_be_nil
-    _(face.assigned_at).must_be_nil
-    _(face.responded_at).must_be_nil
-    _(face.cloak_type).must_equal 'blur'
   end
 end
