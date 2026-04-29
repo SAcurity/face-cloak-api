@@ -172,4 +172,11 @@ describe 'Test Image API Integration' do
     result = JSON.parse(last_response.body)
     _(result['message']).must_equal 'Image not found'
   end
+
+  it 'SECURITY: should prevent SQL injection in image ID lookup' do
+    # Escape characters like space and quote to make it a valid URI
+    evil_id = CGI.escape("' OR 1=1 --")
+    get "api/v1/images/#{evil_id}"
+    _(last_response.status).must_equal 404
+  end
 end

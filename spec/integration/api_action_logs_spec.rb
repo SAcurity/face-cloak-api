@@ -60,4 +60,11 @@ describe 'Test ActionLog API Integration' do
 
     _(FaceCloak::ActionLog.where(face_record_id: @face.id, action: 'unassign').count).must_equal 1
   end
+
+  it 'SECURITY: should prevent SQL injection in image logs lookup' do
+    header 'X-Actor-Id', @img.owner_id
+    evil_id = CGI.escape("' OR 1=1 --")
+    get "api/v1/images/#{evil_id}/logs"
+    _(last_response.status).must_equal 404
+  end
 end

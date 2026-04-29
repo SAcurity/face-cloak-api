@@ -166,4 +166,19 @@ describe 'Test FaceRecord API Integration' do
     post "api/v1/face_records/#{face.id}/respond", respond_data.to_json
     _(last_response.status).must_equal 400
   end
+
+  it 'SECURITY: should prevent SQL injection in face record assignment' do
+    face = FaceCloak::FaceRecord.create(image_id: @img.id)
+
+    # inject data that would attempt to drop the face_records table if executed as SQL
+    injection_data = { assigned_user_id: "attacker'); DROP TABLE face_records; --" }
+
+    header 'X-Actor-Id', @img.owner_id
+    post "api/v1/face_records/#{face.id}/assignment", injection_data.to_json
+    _(last_response.status).must_equal 201 # Should store literally, not execute
+
+    face.refresh
+    _(face.assigned_user_id).must_equal "attacker'); DROP TABLE face_records; --"
+    _(FaceCloak::FaceRecord[face.id]).wont_be_nil # Table should still exist
+  end
 end
