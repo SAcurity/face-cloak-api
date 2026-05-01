@@ -9,11 +9,19 @@ require 'yaml'
 
 require_relative 'test_load_all'
 
-def wipe_database
+def wipe_database # rubocop:disable Metrics/AbcSize
   app.DB[:action_logs].delete
   app.DB[:face_records].delete
+  app.DB[:accounts_images].delete
   app.DB[:images].delete
+  app.DB[:accounts_roles].delete
+  app.DB[:accounts].delete
+  app.DB[:roles].delete
   FileUtils.rm_rf(Dir.glob("#{FaceCloak::Image::STORAGE_DIR}/*"))
+end
+
+def create_account(username, email, password)
+  FaceCloak::CreateAccount.call(account_data: { username:, email:, password: })
 end
 
 DATA = {} # rubocop:disable Style/MutableConstant

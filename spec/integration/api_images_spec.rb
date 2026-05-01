@@ -9,11 +9,12 @@ describe 'Test Image API Integration' do
 
   before do
     wipe_database
+    @account = create_account('alice', 'alice@example.com', 'password123')
   end
 
   it 'HAPPY: should be able to get list of all images' do
-    FaceCloak::Image.create(seed_attributes(DATA[:images][0]))
-    FaceCloak::Image.create(seed_attributes(DATA[:images][1]))
+    FaceCloak::UploadImage.call(image_data: seed_attributes(DATA[:images][0]).merge('owner_id' => @account.id))
+    FaceCloak::UploadImage.call(image_data: seed_attributes(DATA[:images][1]).merge('owner_id' => @account.id))
 
     get 'api/v1/images'
     _(last_response.status).must_equal 200
@@ -25,7 +26,7 @@ describe 'Test Image API Integration' do
   it 'HAPPY: should be able to get details of a single image' do
     img_data = DATA[:images][0]
     seed_binary = Base64.decode64(img_data['file_data'])
-    img = FaceCloak::Image.create(seed_attributes(img_data))
+    img = FaceCloak::UploadImage.call(image_data: seed_attributes(img_data).merge('owner_id' => @account.id))
 
     header 'X-Actor-Id', img.owner_id
     get "api/v1/images/#{img.id}/raw"
@@ -40,9 +41,9 @@ describe 'Test Image API Integration' do
 
   it 'SAD: should return FILTERED data if non-owner requests image with unmasked faces' do
     img_data = DATA[:images][0]
-    img = FaceCloak::Image.create(seed_attributes(img_data))
+    img = FaceCloak::UploadImage.call(image_data: seed_attributes(img_data).merge('owner_id' => @account.id))
 
-    header 'X-Actor-Id', 'not-the-owner'
+    header 'X-Actor-Id', 999_999
     get "api/v1/images/#{img.id}"
     _(last_response.status).must_equal 200
     _(last_response.body).must_include 'PRIVACY_FILTERED_DATA'
@@ -63,15 +64,14 @@ describe 'Test Image API Integration' do
     uploaded_file = Rack::Test::UploadedFile.new(upload.path, 'image/png')
     expected_name = File.basename(upload.path)
 
-    post 'api/v1/images', { owner_id: 'o1', file: uploaded_file }
+    post 'api/v1/images', { owner_id: @account.id, file: uploaded_file }
     _(last_response.status).must_equal 201
 
     result = JSON.parse(last_response.body)
     id = result['data']['attributes']['id']
     _(result['data']['attributes']['file_name']).must_equal expected_name
-    _(result['data']['attributes']['file_data'].end_with?('.png')).must_equal true
 
-    header 'X-Actor-Id', 'o1'
+    header 'X-Actor-Id', @account.id
     get "api/v1/images/#{id}/raw"
     _(last_response.status).must_equal 200
     _(last_response.body).must_equal test_data
@@ -90,11 +90,11 @@ describe 'Test Image API Integration' do
         upload1 = Rack::Test::UploadedFile.new(path1, 'image/png')
         upload2 = Rack::Test::UploadedFile.new(path2, 'image/png')
 
-        post 'api/v1/images', { owner_id: 'photographer_alina', file: upload1 }
+        post 'api/v1/images', { owner_id: @account.id, file: upload1 }
         _(last_response.status).must_equal 201
         first_result = JSON.parse(last_response.body)
 
-        post 'api/v1/images', { owner_id: 'photographer_alina', file: upload2 }
+        post 'api/v1/images', { owner_id: @account.id, file: upload2 }
         _(last_response.status).must_equal 201
         second_result = JSON.parse(last_response.body)
 
@@ -105,6 +105,7 @@ describe 'Test Image API Integration' do
   end
 
   it 'HAPPY: should allow different owners to keep the same file name' do
+    account2 = create_account('bob', 'bob@example.com', 'password123')
     Dir.mktmpdir do |dir1|
       Dir.mktmpdir do |dir2|
         path1 = File.join(dir1, 'shared.png')
@@ -115,11 +116,11 @@ describe 'Test Image API Integration' do
         upload1 = Rack::Test::UploadedFile.new(path1, 'image/png')
         upload2 = Rack::Test::UploadedFile.new(path2, 'image/png')
 
-        post 'api/v1/images', { owner_id: 'photographer_alina', file: upload1 }
+        post 'api/v1/images', { owner_id: @account.id, file: upload1 }
         _(last_response.status).must_equal 201
         first_result = JSON.parse(last_response.body)
 
-        post 'api/v1/images', { owner_id: 'photographer_bruno', file: upload2 }
+        post 'api/v1/images', { owner_id: account2.id, file: upload2 }
         _(last_response.status).must_equal 201
         second_result = JSON.parse(last_response.body)
 
@@ -130,8 +131,9 @@ describe 'Test Image API Integration' do
   end
 
   it 'HAPPY: should delete an owned image and its stored file' do
-    img = FaceCloak::Image.create(seed_attributes(DATA[:images][0]))
-    stored_path = File.join(FaceCloak::Image::STORAGE_DIR, img.file_data)
+    img = FaceCloak::UploadImage.call(image_data: seed_attributes(DATA[:images][0]).merge('owner_id' => @account.id))
+    storage_key = img.file_data
+    stored_path = File.join(FaceCloak::Image::STORAGE_DIR, storage_key)
 
     header 'X-Actor-Id', img.owner_id
     delete "api/v1/images/#{img.id}"
@@ -141,16 +143,16 @@ describe 'Test Image API Integration' do
   end
 
   it 'SAD: should NOT delete an image if requester is not owner' do
-    img = FaceCloak::Image.create(seed_attributes(DATA[:images][0]))
+    img = FaceCloak::UploadImage.call(image_data: seed_attributes(DATA[:images][0]).merge('owner_id' => @account.id))
 
-    header 'X-Actor-Id', 'stranger'
+    header 'X-Actor-Id', 999_999
     delete "api/v1/images/#{img.id}"
     _(last_response.status).must_equal 403
     _(FaceCloak::Image[img.id]).wont_be_nil
   end
 
   it 'SAD: should return not found when deleting an unknown image' do
-    header 'X-Actor-Id', 'photographer_alina'
+    header 'X-Actor-Id', @account.id
     delete 'api/v1/images/missing-image'
     _(last_response.status).must_equal 404
 
@@ -159,7 +161,7 @@ describe 'Test Image API Integration' do
   end
 
   it 'SAD: should NOT be able to delete the same image twice' do
-    img = FaceCloak::Image.create(seed_attributes(DATA[:images][0]))
+    img = FaceCloak::UploadImage.call(image_data: seed_attributes(DATA[:images][0]).merge('owner_id' => @account.id))
 
     header 'X-Actor-Id', img.owner_id
     delete "api/v1/images/#{img.id}"

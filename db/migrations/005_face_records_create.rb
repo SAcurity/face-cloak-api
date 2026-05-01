@@ -7,7 +7,7 @@ Sequel.migration do
     create_table(:face_records) do
       uuid :id, primary_key: true
       foreign_key :image_id, :images, type: :uuid, null: false
-      String :assigned_user_id_secure
+      Integer :assigned_user_id # FK to accounts.id (Integer)
       DateTime :assigned_at
       DateTime :responded_at
       String :cloak_type, default: 'blur'

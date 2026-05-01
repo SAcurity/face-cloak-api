@@ -11,6 +11,15 @@ describe 'Test SecureDB Library' do
     _(FaceCloak::SecureDB.decrypt(ciphertext)).must_equal plaintext
   end
 
+  it 'HAPPY: should generate deterministic HMAC hash' do
+    plaintext = 'searchable pii'
+    hash1 = FaceCloak::SecureDB.hash(plaintext)
+    hash2 = FaceCloak::SecureDB.hash(plaintext)
+
+    _(hash1).must_equal hash2
+    _(hash1).wont_equal plaintext
+  end
+
   it 'SAD: should return nil if decrypting nil' do
     _(FaceCloak::SecureDB.decrypt(nil)).must_be_nil
   end
