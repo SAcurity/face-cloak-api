@@ -14,7 +14,7 @@ module FaceCloak
                  class: :'FaceCloak::Account',
                  join_table: :accounts_images,
                  left_key: :image_id,
-                 right_key: :assignee_id
+                 right_key: :account_id
     many_to_one :owner, class: :'FaceCloak::Account'
 
     plugin :association_dependencies, face_records: :destroy, assignees: :nullify

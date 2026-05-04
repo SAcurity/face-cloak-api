@@ -6,7 +6,7 @@ describe 'Test ActionLog Model Unit Logic' do
   before do
     wipe_database
     @account = create_account('alice', 'alice@example.com', 'password123')
-    @img = FaceCloak::UploadImage.call(image_data: seed_attributes(DATA[:images][0]).merge(owner_id: @account.id))
+    @img = FaceCloak::UploadImage.call(image_data: seed_attributes(DATA[:images][0]).merge('owner_id' => @account.id))
     @face = @img.face_records.first
   end
 

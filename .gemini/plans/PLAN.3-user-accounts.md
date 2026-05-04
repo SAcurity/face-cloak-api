@@ -14,7 +14,11 @@ Implement secure user accounts with salted/hashed passwords, many-to-many associ
 ### 1. Hybrid Database Schema
 - [x] **Integer-based Accounts**: Refactored `Accounts` and `Roles` to use `primary_key :id` (Integer).
 - [x] **UUID-based Resources**: Restored `Images` and `FaceRecords` to use `uuid :id, primary_key: true`.
-- [x] **Stand-alone Join Tables**: Followed teacher's pattern with independent migrations for `accounts_roles` and `accounts_images`.
+- [x] **Stand-alone Join Tables**: Followed teacher's pattern with independent migrations for `accounts_roles`.
+- [x] **Normalization & Constraints**: 
+    - Removed redundant `accounts_images` join table; `face_records` acts as the single source of truth for assignments.
+    - Added strict DB-level `foreign_key` with explicit `on_delete` behaviors.
+    - Added a DB-level `UNIQUE(image_id, assigned_user_id)` constraint to natively enforce the "one face per user per image" rule.
 
 ### 2. Service Objects (Logic Refactoring)
 - [x] `CreateAccount`: Secure registration.

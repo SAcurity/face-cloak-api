@@ -6,7 +6,7 @@ Sequel.migration do
   change do
     create_table(:images) do
       uuid :id, primary_key: true
-      Integer :owner_id, null: false # FK to accounts.id (Integer)
+      foreign_key :owner_id, :accounts, on_delete: :cascade, null: false
       String :file_name, null: false
       String :file_data, null: false
 

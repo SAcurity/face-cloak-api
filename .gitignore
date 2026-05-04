@@ -56,6 +56,7 @@ build-iPhoneSimulator/
 # .rubocop-https?--*
 
 /db/local/*.db
+/db/local/*.schema.sql
 /db/local/*.txt
 /db/local/storage/
 !/db/local/.keep

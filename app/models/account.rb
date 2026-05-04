@@ -7,6 +7,9 @@ require_relative 'password'
 module FaceCloak
   # Models a registered account
   class Account < Sequel::Model
+    one_to_many :owned_images, class: :'FaceCloak::Image', key: :owner_id
+    one_to_many :face_assignments, class: :'FaceCloak::FaceRecord', key: :assigned_user_id
+
     many_to_many :system_roles,
                  class: :'FaceCloak::Role',
                  join_table: :accounts_roles,
@@ -16,7 +19,7 @@ module FaceCloak
     many_to_many :assigned_images,
                  class: :'FaceCloak::Image',
                  join_table: :accounts_images,
-                 left_key: :assignee_id,
+                 left_key: :account_id,
                  right_key: :image_id
 
     plugin :association_dependencies, assigned_images: :nullify
