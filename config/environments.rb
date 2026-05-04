@@ -32,7 +32,8 @@ module FaceCloak
 
     # Setup SecureDB
     db_key = ENV.delete('DB_KEY')
-    SecureDB.setup(db_key)
+    hash_key = ENV.delete('HASH_KEY')
+    SecureDB.setup(db_key, hash_key)
 
     configure :development, :production do
       plugin :common_logger, $stderr

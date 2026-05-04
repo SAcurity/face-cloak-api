@@ -59,8 +59,22 @@ This document outlines the architectural patterns and engineering standards for 
     self.field_secure = SecureDB.encrypt(plaintext)
   end
   ```
+- **Searchable PII (HMAC Pattern):** To allow deterministic lookup of encrypted data without decrypting the entire table:
+    - **Storage:** Create both `*_secure` (ciphertext) and `*_hash` (HMAC) columns.
+    - **Logic:** `self.email_hash = SecureDB.hash(plaintext)` during assignment.
+    - **Lookup:** Use the hash for `WHERE` clauses: `Account.first(email_hash: SecureDB.hash(query_email))`.
+- **Key-Stretched Passwords:** Use slow hashing algorithms (SCrypt) to prevent brute-force attacks.
+    - **Value Object:** Encapsulate logic in a `Password` class that stores salt and hash as a JSON/String digest.
 
-## 4. Controller Layer (Roda)
+## 4. Business Logic Layer
+
+### Service Object Pattern (Tyto API Alignment)
+- **Goal:** Keep controllers "thin" and business logic "reusable."
+- **Pattern:** Create a dedicated class in `app/services/` for every complex operation (e.g., `CreateAccount`, `AddCollaborator`).
+- **Structure:** Use a `call` method (instance or class level) to execute the operation.
+- **Error Handling:** Services should handle domain-specific validations and return clear success/failure states to the controller.
+
+## 5. Controller Layer (Roda)
 
 ### Error Handling & Logging
 - **Mass Assignment:** Specifically rescue `Sequel::MassAssignmentRestriction` and return `400 Bad Request`.

@@ -13,6 +13,7 @@ gem 'puma', '~> 7.0'
 gem 'rake'
 gem 'roda', '~> 3.0'
 gem 'sequel'
+gem 'sequel-seed'
 
 # Security
 gem 'rbnacl', '~> 7.1'

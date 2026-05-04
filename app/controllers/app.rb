@@ -17,9 +17,13 @@ module FaceCloak
         Api.logger.warn "MASS-ASSIGNMENT: #{e.message}"
         response.status = 400
         { message: 'Illegal Attributes' }.to_json
-      when Sequel::ValidationFailed, Sequel::NoMatchingRow
-        Api.logger.warn "VALIDATION/NOT FOUND: #{e.message}"
-        response.status = e.is_a?(Sequel::NoMatchingRow) ? 404 : 400
+      when Sequel::NoMatchingRow
+        Api.logger.warn "NOT FOUND: #{e.message}"
+        response.status = 404
+        { message: e.message }.to_json
+      when Sequel::ValidationFailed, Sequel::ForeignKeyConstraintViolation
+        Api.logger.warn "VALIDATION/FK ERROR: #{e.message}"
+        response.status = 400
         { message: e.message }.to_json
       when ForbiddenRequest
         response.status = 403
@@ -52,6 +56,53 @@ module FaceCloak
 
       @api_root = 'api/v1'
       routing.on @api_root do
+        routing.on 'accounts' do
+          @account_route = "#{@api_root}/accounts"
+
+          routing.on 'authenticate' do
+            routing.post do
+              credentials = parse_request(routing)
+              account = AuthenticateAccount.call(
+                username: credentials['username'],
+                password: credentials['password']
+              )
+              { data: account.to_h }.to_json
+            rescue AuthenticateAccount::UnauthorizedError => e
+              routing.halt 401, { message: e.message }.to_json
+            end
+          end
+
+          routing.is do
+            routing.post do
+              account_data = parse_request(routing)
+              new_account = CreateAccount.call(account_data:)
+              response.status = 201
+              response['Location'] = "#{@account_route}/#{new_account.username}"
+              { message: 'Account created', data: new_account.to_h }.to_json
+            rescue StandardError => e
+              routing.halt 400, { message: e.message }.to_json
+            end
+          end
+
+          routing.post 'search' do
+            search_data = parse_request(routing)
+            email = search_data['email']
+            account = Account.first(email_hash: SecureDB.hash(email))
+            raise(Sequel::NoMatchingRow, 'Account not found') unless account
+
+            account.to_json
+          end
+
+          routing.on String do |username|
+            routing.get do
+              account = Account.first(username:)
+              raise(Sequel::NoMatchingRow, 'Account not found') unless account
+
+              account.to_json
+            end
+          end
+        end
+
         routing.on 'images' do
           @image_route = "#{@api_root}/images"
 
@@ -64,8 +115,7 @@ module FaceCloak
           # POST /api/v1/images
           routing.post true do
             new_data = parse_image_upload(routing)
-            new_image = Image.new(new_data)
-            raise('Could not save image record') unless new_image.save_changes
+            new_image = UploadImage.call(image_data: new_data)
 
             response.status = 201
             response['Location'] = "#{@image_route}/#{new_image.id}"
@@ -79,11 +129,11 @@ module FaceCloak
 
                 # RBAC: ONLY Owner can access raw data
                 requester_id = routing.env['HTTP_X_ACTOR_ID']
-                raise ForbiddenRequest, 'You do not own this image' unless requester_id == image.owner_id
+                raise ForbiddenRequest, 'You do not own this image' unless requester_id.to_i == image.owner_id
 
                 ext = File.extname(image.file_name).delete('.')
                 response['Content-Type'] = "image/#{ext}"
-                image.read_file
+                GetImageRawFile.call(image_id: id)
               end
             end
 
@@ -93,7 +143,7 @@ module FaceCloak
 
                 # RBAC: ONLY Owner can see all logs for an image
                 requester_id = routing.env['HTTP_X_ACTOR_ID']
-                raise ForbiddenRequest, 'You do not own this image' unless requester_id == image.owner_id
+                raise ForbiddenRequest, 'You do not own this image' unless requester_id.to_i == image.owner_id
 
                 logs = image.face_records
                             .flat_map(&:action_logs)
@@ -120,7 +170,7 @@ module FaceCloak
                 end
 
                 if all_unveiled
-                  image.read_file
+                  GetImageRawFile.call(image_id: id)
                 else
                   response['X-Privacy-Filtered'] = 'true'
                   "PRIVACY_FILTERED_DATA_FOR_#{image.id}"
@@ -132,9 +182,9 @@ module FaceCloak
                 image = Image[id] || raise(Sequel::NoMatchingRow, 'Image not found')
 
                 requester_id = routing.env['HTTP_X_ACTOR_ID']
-                raise ForbiddenRequest, 'You do not own this image' unless requester_id == image.owner_id
+                raise ForbiddenRequest, 'You do not own this image' unless requester_id.to_i == image.owner_id
 
-                raise('Could not delete image') unless image.destroy
+                DeleteImage.call(image_id: id)
 
                 { message: 'Image deleted' }.to_json
               end
@@ -158,13 +208,9 @@ module FaceCloak
 
             # RBAC: Only owner can create face records for their image
             requester_id = routing.env['HTTP_X_ACTOR_ID']
-            raise ForbiddenRequest, 'You do not own this image' unless requester_id == image.owner_id
+            raise ForbiddenRequest, 'You do not own this image' unless requester_id.to_i == image.owner_id
 
-            new_face = FaceRecord.new(new_data)
-            raise('Could not save face record') unless new_face.save_changes
-
-            # Log creation
-            new_face.add_action_log(action: 'create', actor_id: requester_id)
+            new_face = CreateFaceRecord.call(face_data: new_data, actor_id: requester_id.to_i)
 
             response.status = 201
             response['Location'] = "#{@resource_route}/#{new_face.id}"
@@ -179,8 +225,8 @@ module FaceCloak
 
                 # RBAC: Only Owner or the specific Assignee can see logs for this record
                 requester_id = routing.env['HTTP_X_ACTOR_ID']
-                is_owner = requester_id == face_record.image.owner_id
-                is_assignee = requester_id == face_record.assigned_user_id
+                is_owner = requester_id.to_i == face_record.image.owner_id
+                is_assignee = requester_id.to_i == face_record.assigned_user_id
                 raise ForbiddenRequest, 'Access denied' unless is_owner || is_assignee
 
                 output = { data: face_record.action_logs.map(&:to_h) }
@@ -204,37 +250,43 @@ module FaceCloak
 
                 # RBAC: Only image owner can edit/assign face records
                 requester_id = routing.env['HTTP_X_ACTOR_ID']
-                raise ForbiddenRequest, 'You do not own this image' unless requester_id == face_record.image.owner_id
+                unless requester_id.to_i == face_record.image.owner_id
+                  raise ForbiddenRequest,
+                        'You do not own this image'
+                end
 
                 assign_data = parse_request(routing)
                 assigned_user_id = assign_data.fetch('assigned_user_id')
 
-                # Constraint: Owner can only assign ONE face record to themselves per image
-                if assigned_user_id == face_record.image.owner_id
-                  already_assigned = face_record.image.face_records.any? do |fr|
-                    fr.assigned_user_id == assigned_user_id && fr.id != face_record.id
-                  end
-                  raise ForbiddenRequest, 'You can only assign one face to yourself' if already_assigned
-                end
+                face_record = AssignFaceRecord.call(
+                  face_record_id: id,
+                  assigned_user_id:,
+                  actor_id: requester_id.to_i
+                )
 
-                face_record.assign_to(assigned_user_id)
-                raise 'Could not assign face record' unless face_record.save_changes
-
-                face_record.add_action_log(action: 'assign', actor_id: requester_id)
                 response.status = 201
-                { message: 'Face record assigned', data: face_record.to_h }.to_json
+                { message: 'Face record assigned and access granted', data: face_record.to_h }.to_json
+              rescue AssignFaceRecord::ForbiddenError => e
+                routing.halt 403, { message: e.message }.to_json
               end
 
               routing.on method: :delete do
                 face_record = FaceRecord[id] || raise(Sequel::NoMatchingRow, 'Face record not found')
 
                 requester_id = routing.env['HTTP_X_ACTOR_ID']
-                raise ForbiddenRequest, 'You do not own this image' unless requester_id == face_record.image.owner_id
+                unless requester_id.to_i == face_record.image.owner_id
+                  raise ForbiddenRequest,
+                        'You do not own this image'
+                end
 
-                face_record.clear_assignment
-                raise 'Could not unassign face record' unless face_record.save_changes
+                face_record.update(
+                  assigned_user_id: nil,
+                  assigned_at: nil,
+                  responded_at: nil,
+                  cloak_type: CloakType::DEFAULT
+                )
 
-                face_record.add_action_log(action: 'unassign', actor_id: requester_id)
+                face_record.add_action_log(action: 'unassign', actor_id: requester_id.to_i)
                 { message: 'Face record unassigned', data: face_record.to_h }.to_json
               end
             end
@@ -245,18 +297,20 @@ module FaceCloak
                 face_record = FaceRecord[id] || raise(Sequel::NoMatchingRow, 'Face record not found')
 
                 # Zero-Trust RBAC: ONLY the assigned user can respond/unveil.
-                # Even the image owner cannot call this if they are not the assignee.
                 requester_id = routing.env['HTTP_X_ACTOR_ID']
-                unless face_record.assigned? && requester_id == face_record.assigned_user_id
+                unless face_record.assigned? && requester_id.to_i == face_record.assigned_user_id
                   raise ForbiddenRequest, 'You are not assigned to this record'
                 end
 
                 response_data = parse_request(routing)
                 cloak_type = response_data.fetch('cloak_type')
-                face_record.respond_with(cloak_type)
-                raise 'Could not update face record' unless face_record.save_changes
 
-                face_record.add_action_log(action: 'respond', actor_id: requester_id)
+                face_record = RespondToFaceRecord.call(
+                  face_record_id: id,
+                  cloak_type:,
+                  actor_id: requester_id.to_i
+                )
+
                 response.status = 201
                 { message: 'Face record updated', data: face_record.to_h }.to_json
               end
@@ -273,15 +327,19 @@ module FaceCloak
     def forbidden(message) = { message: }.to_json
     def parse_request(routing) = JSON.parse(routing.body.read)
 
-    def parse_image_upload(routing)
+    def parse_image_upload(routing) # rubocop:disable Metrics/MethodLength
       uploaded_file = routing.params['file']
       raise ArgumentError, 'file upload is required' unless uploaded_file
 
-      owner_id = routing.params['owner_id'].to_s
-      raise ArgumentError, 'owner_id is required' if owner_id.empty?
+      owner_id = routing.params['owner_id']
+      raise ArgumentError, 'owner_id is required' if owner_id.nil? || owner_id.to_s.empty?
+
+      # Verify account exists (Account.id is now Integer)
+      account = Account[owner_id.to_i]
+      raise ArgumentError, 'Account not found' unless account
 
       {
-        'owner_id' => owner_id,
+        'owner_id' => account.id,
         'file_name' => upload_filename(uploaded_file),
         'file_data' => upload_tempfile(uploaded_file).path
       }

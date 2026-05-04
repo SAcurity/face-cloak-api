@@ -65,13 +65,28 @@ namespace :db do
   end
 
   task :load_models do # rubocop:disable Rake/Desc
-    require_app('models')
+    require_app(%w[models services])
   end
 
   desc 'Run migrations'
   task migrate: %i[load print_env] do
     puts 'Migrating database to latest'
     Sequel::Migrator.run(@app.DB, 'db/migrations')
+  end
+
+  task reset_seeds: :load_models do # rubocop:disable Rake/Desc
+    db = FaceCloak::Api.DB
+    db[:schema_seeds].delete if db.tables.include?(:schema_seeds)
+    FaceCloak::Account.dataset.destroy
+  end
+
+  desc 'Run database seeds'
+  task seed: %i[load load_models] do
+    puts 'Seeding database'
+    require 'sequel/extensions/seed'
+    Sequel::Seed.setup(@app.environment)
+    Sequel.extension :seed
+    Sequel::Seeder.apply(@app.DB, 'db/seeds')
   end
 
   desc 'Destroy data in database; maintain tables'
@@ -111,5 +126,22 @@ namespace :db do
 
     Sequel::Migrator.run(@app.DB, 'db/migrations')
     puts 'Migrated database to latest'
+  end
+end
+
+desc 'Delete all data and reseed'
+task reseed: %i[db:reset_seeds db:seed]
+
+namespace :newkey do
+  desc 'Create sample cryptographic key for database'
+  task :db do
+    require_app('lib', config: false)
+    puts "DB_KEY: #{FaceCloak::SecureDB.generate_key}"
+  end
+
+  desc 'Create sample cryptographic key for HMAC lookup hashing'
+  task :hash do
+    require_app('lib', config: false)
+    puts "HASH_KEY: #{FaceCloak::SecureDB.generate_key}"
   end
 end
