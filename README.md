@@ -195,13 +195,15 @@ rake spec
 ## Run
 Run this API using:
 ```bash
-bundle exec puma
+rake puma
 ```
 
 Or you can rerun the API using:
 ```bash
 rake rerun
 ```
+
+Both commands default to port `3000`. Override it with `PORT=xxxx` when needed.
 
 ## Release Check
 Before submitting pull requests, please check if specs, style, and dependency audits pass:

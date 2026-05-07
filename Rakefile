@@ -49,9 +49,16 @@ task console: :print_env do
 end
 
 # run server
+desc 'Run puma server'
+task :puma do
+  port = ENV.fetch('PORT', '3000')
+  sh "bundle exec puma -p #{port}"
+end
+
 desc 'Run puma with automatic restart on file changes'
 task :rerun do
-  sh 'bundle exec rerun --no-notify --background -- puma'
+  port = ENV.fetch('PORT', '3000')
+  sh "bundle exec rerun --no-notify --background -- puma -p #{port}"
 end
 
 # database
