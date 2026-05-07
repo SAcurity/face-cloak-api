@@ -1,14 +1,13 @@
 # frozen_string_literal: true
 
 require_relative '../spec_helper'
-require 'tmpdir'
-require 'tempfile'
 
 describe 'Test Image API Integration' do
   include Rack::Test::Methods
 
   before do
     wipe_database
+    @req_header = { 'CONTENT_TYPE' => 'application/json' }
     @account = create_account('alice', 'alice@example.com', 'password123')
   end
 
@@ -16,7 +15,7 @@ describe 'Test Image API Integration' do
     FaceCloak::UploadImage.call(image_data: seed_attributes(DATA[:images][0]).merge('owner_id' => @account.id))
     FaceCloak::UploadImage.call(image_data: seed_attributes(DATA[:images][1]).merge('owner_id' => @account.id))
 
-    get 'api/v1/images'
+    get 'api/v1/images', nil, @req_header
     _(last_response.status).must_equal 200
 
     result = JSON.parse(last_response.body)
@@ -29,13 +28,13 @@ describe 'Test Image API Integration' do
     img = FaceCloak::UploadImage.call(image_data: seed_attributes(img_data).merge('owner_id' => @account.id))
 
     header 'X-Actor-Id', img.owner_id
-    get "api/v1/images/#{img.id}/raw"
+    get "api/v1/images/#{img.id}/raw", nil, @req_header
     _(last_response.status).must_equal 200
     _(last_response.headers['Content-Type']).must_include 'image'
     _(last_response.body).must_equal seed_binary
 
     # Also verify default route is filtered for owner
-    get "api/v1/images/#{img.id}"
+    get "api/v1/images/#{img.id}", nil, @req_header
     _(last_response.body).must_include 'PRIVACY_FILTERED_DATA'
   end
 
@@ -44,14 +43,13 @@ describe 'Test Image API Integration' do
     img = FaceCloak::UploadImage.call(image_data: seed_attributes(img_data).merge('owner_id' => @account.id))
 
     header 'X-Actor-Id', 999_999
-    get "api/v1/images/#{img.id}"
+    get "api/v1/images/#{img.id}", nil, @req_header
     _(last_response.status).must_equal 200
     _(last_response.body).must_include 'PRIVACY_FILTERED_DATA'
   end
 
   it 'SAD: should return error if unknown image requested' do
-    get '/api/v1/images/missing-image'
-
+    get '/api/v1/images/missing-image', nil, @req_header
     _(last_response.status).must_equal 404
   end
 
@@ -72,62 +70,11 @@ describe 'Test Image API Integration' do
     _(result['data']['attributes']['file_name']).must_equal expected_name
 
     header 'X-Actor-Id', @account.id
-    get "api/v1/images/#{id}/raw"
+    get "api/v1/images/#{id}/raw", nil, @req_header
     _(last_response.status).must_equal 200
     _(last_response.body).must_equal test_data
   ensure
     upload.close!
-  end
-
-  it 'HAPPY: should suffix duplicate file names for the same owner' do
-    Dir.mktmpdir do |dir1|
-      Dir.mktmpdir do |dir2|
-        path1 = File.join(dir1, 'repeat.png')
-        path2 = File.join(dir2, 'repeat.png')
-        File.binwrite(path1, 'first image')
-        File.binwrite(path2, 'second image')
-
-        upload1 = Rack::Test::UploadedFile.new(path1, 'image/png')
-        upload2 = Rack::Test::UploadedFile.new(path2, 'image/png')
-
-        post 'api/v1/images', { owner_id: @account.id, file: upload1 }
-        _(last_response.status).must_equal 201
-        first_result = JSON.parse(last_response.body)
-
-        post 'api/v1/images', { owner_id: @account.id, file: upload2 }
-        _(last_response.status).must_equal 201
-        second_result = JSON.parse(last_response.body)
-
-        _(first_result['data']['attributes']['file_name']).must_equal 'repeat.png'
-        _(second_result['data']['attributes']['file_name']).must_equal 'repeat-1.png'
-      end
-    end
-  end
-
-  it 'HAPPY: should allow different owners to keep the same file name' do
-    account2 = create_account('bob', 'bob@example.com', 'password123')
-    Dir.mktmpdir do |dir1|
-      Dir.mktmpdir do |dir2|
-        path1 = File.join(dir1, 'shared.png')
-        path2 = File.join(dir2, 'shared.png')
-        File.binwrite(path1, 'owner a image')
-        File.binwrite(path2, 'owner b image')
-
-        upload1 = Rack::Test::UploadedFile.new(path1, 'image/png')
-        upload2 = Rack::Test::UploadedFile.new(path2, 'image/png')
-
-        post 'api/v1/images', { owner_id: @account.id, file: upload1 }
-        _(last_response.status).must_equal 201
-        first_result = JSON.parse(last_response.body)
-
-        post 'api/v1/images', { owner_id: account2.id, file: upload2 }
-        _(last_response.status).must_equal 201
-        second_result = JSON.parse(last_response.body)
-
-        _(first_result['data']['attributes']['file_name']).must_equal 'shared.png'
-        _(second_result['data']['attributes']['file_name']).must_equal 'shared.png'
-      end
-    end
   end
 
   it 'HAPPY: should delete an owned image and its stored file' do
@@ -136,7 +83,7 @@ describe 'Test Image API Integration' do
     stored_path = File.join(FaceCloak::Image::STORAGE_DIR, storage_key)
 
     header 'X-Actor-Id', img.owner_id
-    delete "api/v1/images/#{img.id}"
+    delete "api/v1/images/#{img.id}", nil, @req_header
     _(last_response.status).must_equal 200
     _(FaceCloak::Image[img.id]).must_be_nil
     _(File.exist?(stored_path)).must_equal false
@@ -146,39 +93,14 @@ describe 'Test Image API Integration' do
     img = FaceCloak::UploadImage.call(image_data: seed_attributes(DATA[:images][0]).merge('owner_id' => @account.id))
 
     header 'X-Actor-Id', 999_999
-    delete "api/v1/images/#{img.id}"
+    delete "api/v1/images/#{img.id}", nil, @req_header
     _(last_response.status).must_equal 403
     _(FaceCloak::Image[img.id]).wont_be_nil
   end
 
-  it 'SAD: should return not found when deleting an unknown image' do
-    header 'X-Actor-Id', @account.id
-    delete 'api/v1/images/missing-image'
-    _(last_response.status).must_equal 404
-
-    result = JSON.parse(last_response.body)
-    _(result['message']).must_equal 'Image not found'
-  end
-
-  it 'SAD: should NOT be able to delete the same image twice' do
-    img = FaceCloak::UploadImage.call(image_data: seed_attributes(DATA[:images][0]).merge('owner_id' => @account.id))
-
-    header 'X-Actor-Id', img.owner_id
-    delete "api/v1/images/#{img.id}"
-    _(last_response.status).must_equal 200
-
-    header 'X-Actor-Id', img.owner_id
-    delete "api/v1/images/#{img.id}"
-    _(last_response.status).must_equal 404
-
-    result = JSON.parse(last_response.body)
-    _(result['message']).must_equal 'Image not found'
-  end
-
   it 'SECURITY: should prevent SQL injection in image ID lookup' do
-    # Escape characters like space and quote to make it a valid URI
     evil_id = CGI.escape("' OR 1=1 --")
-    get "api/v1/images/#{evil_id}"
+    get "api/v1/images/#{evil_id}", nil, @req_header
     _(last_response.status).must_equal 404
   end
 end

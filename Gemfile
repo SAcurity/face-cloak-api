@@ -13,20 +13,15 @@ gem 'puma', '~> 7.0'
 gem 'rake'
 gem 'roda', '~> 3.0'
 gem 'sequel'
-gem 'sequel-seed'
 
 # Security
 gem 'rbnacl', '~> 7.1'
 
 # Database
 group :development, :test do
-  gem 'bundler-audit'
   gem 'hirb'
-  gem 'rubocop'
-  gem 'rubocop-minitest'
-  gem 'rubocop-performance'
-  gem 'rubocop-rake'
-  gem 'rubocop-sequel'
+  gem 'rack-test'
+  gem 'sequel-seed'
   gem 'sqlite3', '~> 2.0'
 end
 
@@ -34,11 +29,16 @@ end
 group :test do
   gem 'minitest'
   gem 'minitest-rg'
-  gem 'rack-test'
 end
 
 # Development
 group :development do
+  gem 'bundler-audit'
   gem 'pry'
   gem 'rerun'
+  gem 'rubocop'
+  gem 'rubocop-minitest'
+  gem 'rubocop-performance'
+  gem 'rubocop-rake'
+  gem 'rubocop-sequel'
 end
