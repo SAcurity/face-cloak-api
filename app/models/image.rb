@@ -35,9 +35,24 @@ module FaceCloak
           id:,
           owner_id:,
           file_name:,
-          file_data:
+          face_ids: ordered_face_records.map(&:id)
         }
       }
+    end
+
+    def ordered_face_records
+      face_records_dataset.order(Sequel.asc(:x_min), Sequel.asc(:y_min), Sequel.asc(:id)).all
+    end
+
+    def privacy_hash
+      # FORCE reload of associations to ensure we get the LATEST settings
+      # from the database, bypassing Sequel's association cache.
+      latest_faces = face_records_dataset.all
+
+      settings = latest_faces.sort_by(&:id).map do |f|
+        "#{f.id}:#{f.effective_cloak_type}"
+      end.join('|')
+      Digest::SHA256.hexdigest(settings)[0..12]
     end
 
     def to_json(options = {})

@@ -114,7 +114,10 @@ namespace :db do
     db_filename = @app.DB.opts[:database]
     @app.DB.disconnect
     FileUtils.rm_f(db_filename)
-    puts "Deleted #{db_filename}"
+
+    # Clear all files in storage and cache
+    FileUtils.rm_rf(Dir.glob('db/local/storage/*'))
+    puts 'Cleared db/local/storage/'
   end
 
   desc 'Recreate a brand-new empty dev/test database'

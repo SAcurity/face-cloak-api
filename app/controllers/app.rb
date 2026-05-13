@@ -28,7 +28,7 @@ module FaceCloak
         Api.logger.warn "VALIDATION/FK ERROR: #{e.message}"
         response.status = 400
         { message: e.message }.to_json
-      when ForbiddenRequest
+      when ForbiddenRequest, AssignFaceRecord::ForbiddenError
         response.status = 403
         { message: e.message }.to_json
       when JSON::ParserError, RuntimeError
@@ -75,17 +75,23 @@ module FaceCloak
       uploaded_file = routing.params['file']
       raise ArgumentError, 'file upload is required' unless uploaded_file
 
-      owner_id = routing.params['owner_id']
-      raise ArgumentError, 'owner_id is required' if owner_id.nil? || owner_id.to_s.empty?
+      # Use X-Actor-Id header as the source of truth for ownership
+      owner_id = routing.env['HTTP_X_ACTOR_ID']
+      raise ArgumentError, 'X-Actor-Id header is required for upload' if owner_id.to_s.empty?
 
-      # Verify account exists (Account.id is now Integer)
+      # Verify account exists
       account = Account[owner_id.to_i]
       raise ArgumentError, 'Account not found' unless account
+
+      # Safely get the tempfile path
+      temp_file = upload_tempfile(uploaded_file)
+      # Ensure the file is flushed and accessible
+      temp_file.rewind
 
       {
         'owner_id' => account.id,
         'file_name' => upload_filename(uploaded_file),
-        'file_data' => upload_tempfile(uploaded_file).path
+        'file_data' => temp_file.path # This path must be persistent during the Service call
       }
     end
 

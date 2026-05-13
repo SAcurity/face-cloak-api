@@ -14,7 +14,8 @@ module FaceCloak
 
     plugin :timestamps, update_on_create: true
     plugin :whitelist_security
-    set_allowed_columns :image_id, :assigned_user_id, :assigned_at, :responded_at, :cloak_type
+    set_allowed_columns :image_id, :assigned_user_id, :assigned_at, :responded_at, :cloak_type,
+                        :x_min, :y_min, :x_max, :y_max, :landmarks
 
     def before_create
       self.id ||= SecureRandom.uuid
@@ -33,7 +34,12 @@ module FaceCloak
     end
 
     def effective_cloak_type
-      assigned? ? cloak_type : 'blur'
+      # Direct access to DB column, fallback to 'blur'
+      self[:cloak_type].nil? || self[:cloak_type].empty? ? 'blur' : self[:cloak_type]
+    end
+
+    def landmarks_map
+      JSON.parse(landmarks || '{}', symbolize_names: true)
     end
 
     def to_h # rubocop:disable Metrics/MethodLength
@@ -46,6 +52,10 @@ module FaceCloak
           assigned_at:,
           responded_at:,
           cloak_type:,
+          x_min:,
+          y_min:,
+          x_max:,
+          y_max:,
           updated_at:
         }
       }

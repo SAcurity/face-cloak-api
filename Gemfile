@@ -6,9 +6,12 @@ ruby '4.0.2'
 
 # Web API
 gem 'base64'
+gem 'chunky_png'
 gem 'figaro'
+gem 'google-genai'
 gem 'json'
 gem 'logger', '~> 1.0'
+gem 'mime-types'
 gem 'puma', '~> 7.0'
 gem 'rake'
 gem 'roda', '~> 3.0'

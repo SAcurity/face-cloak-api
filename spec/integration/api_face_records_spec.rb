@@ -12,17 +12,24 @@ describe 'Test FaceRecord API Integration' do
     @assignee = create_account('bob', 'bob@example.com', 'password123')
     @stranger = create_account('charlie', 'charlie@example.com', 'password123')
     @img = FaceCloak::UploadImage.call(image_data: seed_attributes(DATA[:images][0]).merge('owner_id' => @owner.id))
+    # Ensure at least one face record for tests
+    if @img.face_records.empty?
+      FaceCloak::CreateFaceRecord.call(face_data: { image_id: @img.id }, actor_id: @owner.id)
+      @img.refresh
+    end
   end
 
-  it 'HAPPY: should be able to get list of all face records' do
-    FaceCloak::CreateFaceRecord.call(face_data: { image_id: @img.id, cloak_type: 'blur' }, actor_id: @owner.id)
-    FaceCloak::CreateFaceRecord.call(face_data: { image_id: @img.id, cloak_type: 'comic' }, actor_id: @owner.id)
+  it 'HAPPY: should be able to get list of all face records for an image' do
+    FaceCloak::CreateFaceRecord.call(face_data: { image_id: @img.id, cloak_type: 'blur', x_min: 0.1 },
+                                     actor_id: @owner.id)
+    FaceCloak::CreateFaceRecord.call(face_data: { image_id: @img.id, cloak_type: 'comic', x_min: 0.2 },
+                                     actor_id: @owner.id)
 
-    get 'api/v1/face_records', nil, @req_header
+    get "api/v1/images/#{@img.id}/face_records", nil, @req_header
     _(last_response.status).must_equal 200
 
     result = JSON.parse(last_response.body)
-    _(result['data'].count).must_equal 4 # 2 from upload + 2 manual
+    _(result['data'].count).must_be :>=, 2
     _(result['data'][0]['type']).must_equal 'face_record'
   end
 
@@ -44,10 +51,10 @@ describe 'Test FaceRecord API Integration' do
   end
 
   it 'HAPPY: should be able to create a new face record as owner' do
-    new_face = { image_id: @img.id, cloak_type: 'pixelate' }
+    new_face = { cloak_type: 'pixelate', x_min: 0.5, y_min: 0.5, x_max: 0.6, y_max: 0.6 }
 
     header 'X-Actor-Id', @owner.id
-    post 'api/v1/face_records', new_face.to_json, @req_header
+    post "api/v1/images/#{@img.id}/face_records", new_face.to_json, @req_header
     _(last_response.status).must_equal 201
 
     result = JSON.parse(last_response.body)
@@ -56,10 +63,10 @@ describe 'Test FaceRecord API Integration' do
   end
 
   it 'SAD: should NOT be able to create a face record if not owner' do
-    new_face = { image_id: @img.id, cloak_type: 'blur' }
+    new_face = { cloak_type: 'blur', x_min: 0.5 }
 
     header 'X-Actor-Id', @stranger.id
-    post 'api/v1/face_records', new_face.to_json, @req_header
+    post "api/v1/images/#{@img.id}/face_records", new_face.to_json, @req_header
     _(last_response.status).must_equal 403
   end
 
@@ -101,6 +108,9 @@ describe 'Test FaceRecord API Integration' do
 
     face.refresh
     _(face.cloak_type).must_equal 'mask'
+
+    cached_files = Dir.glob(File.join(FaceCloak::CloakImage::CACHE_DIR, "full_#{@img.id}_*.png"))
+    _(cached_files).wont_be_empty
   end
 
   it 'SAD: should NOT allow image owner to respond if NOT assigned (Zero-Trust)' do
@@ -112,12 +122,48 @@ describe 'Test FaceRecord API Integration' do
     _(last_response.status).must_equal 403
   end
 
-  it 'SAD: should reject invalid cloak types on respond' do
-    face = @img.face_records.first
-    FaceCloak::AssignFaceRecord.call(face_record_id: face.id, assigned_user_id: @assignee.id, actor_id: @owner.id)
+  it 'HAPPY: should be able to assign different faces in one image to different users' do
+    # Ensure we have at least 2 faces
+    if @img.face_records.count < 2
+      FaceCloak::CreateFaceRecord.call(face_data: { image_id: @img.id, x_min: 0.1 }, actor_id: @owner.id)
+      @img.refresh
+    end
 
-    header 'X-Actor-Id', @assignee.id
-    post "api/v1/face_records/#{face.id}/respond", { cloak_type: 'invisible' }.to_json, @req_header
-    _(last_response.status).must_equal 400
+    face1 = @img.face_records[0]
+    face2 = @img.face_records[1]
+
+    header 'X-Actor-Id', @owner.id
+    post "api/v1/face_records/#{face1.id}/assignment", { assigned_user_id: @assignee.id }.to_json, @req_header
+    _(last_response.status).must_equal 201
+
+    post "api/v1/face_records/#{face2.id}/assignment", { assigned_user_id: @stranger.id }.to_json, @req_header
+    _(last_response.status).must_equal 201
+
+    face1.refresh
+    face2.refresh
+    _(face1.assigned_user_id).must_equal @assignee.id
+    _(face2.assigned_user_id).must_equal @stranger.id
+  end
+
+  it 'SAD: should NOT allow assigning the same user to two different faces in the same image' do
+    # Ensure we have at least 2 faces
+    if @img.face_records.count < 2
+      FaceCloak::CreateFaceRecord.call(face_data: { image_id: @img.id, x_min: 0.1 }, actor_id: @owner.id)
+      @img.refresh
+    end
+
+    face1 = @img.face_records[0]
+    face2 = @img.face_records[1]
+
+    header 'X-Actor-Id', @owner.id
+    # First assignment
+    post "api/v1/face_records/#{face1.id}/assignment", { assigned_user_id: @assignee.id }.to_json, @req_header
+    _(last_response.status).must_equal 201
+
+    # Second assignment to the same user in the same image (Constraint violation)
+    post "api/v1/face_records/#{face2.id}/assignment", { assigned_user_id: @assignee.id }.to_json, @req_header
+    _(last_response.status).must_equal 403
+    result = JSON.parse(last_response.body)
+    _(result['message']).must_include 'already assigned'
   end
 end

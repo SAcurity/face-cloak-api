@@ -5,6 +5,7 @@ require 'figaro'
 require 'logger'
 require 'sequel'
 require './app/lib/secure_db'
+require './app/lib/gemini_api'
 
 module FaceCloak
   # Configuration for the API
@@ -34,6 +35,11 @@ module FaceCloak
     db_key = ENV.delete('DB_KEY')
     hash_key = ENV.delete('HASH_KEY')
     SecureDB.setup(db_key, hash_key)
+
+    # Setup GeminiApi
+    gemini_key = ENV.delete('GEMINI_API_KEY')
+    use_gemini = gemini_key && (environment != :test || ENV.fetch('USE_REAL_GEMINI_IN_TEST', nil) == 'true')
+    GeminiApi.setup(gemini_key) if use_gemini
 
     configure :development, :production do
       plugin :common_logger, $stderr

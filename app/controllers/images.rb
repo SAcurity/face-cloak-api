@@ -57,18 +57,46 @@ module FaceCloak
           end
         end
 
+        routing.is 'face_records' do
+          image = Image[id] || raise(Sequel::NoMatchingRow, 'Image not found')
+
+          routing.get do
+            output = { data: image.ordered_face_records.map(&:to_h) }
+            JSON.pretty_generate(output)
+          end
+
+          routing.post do
+            # RBAC: Only owner can create face records for their image
+            requester_id = routing.env['HTTP_X_ACTOR_ID']
+            raise ForbiddenRequest, 'You do not own this image' unless requester_id.to_i == image.owner_id
+
+            new_data = HttpRequest.new(routing).body_data
+            new_face = CreateFaceRecord.call(
+              face_data: new_data.merge(image_id: image.id),
+              actor_id: requester_id.to_i
+            )
+
+            response.status = 201
+            { message: 'Face record created', data: new_face.to_h }.to_json
+          end
+        end
+
         routing.is do
           # GET /api/v1/images/:id (Display protected image by default)
           routing.get do
             image = Image[id] || raise(Sequel::NoMatchingRow, 'Image not found')
+            # Force refresh to get latest face_record settings (e.g., respond changes)
+            image.refresh
 
             # Set binary content type based on extension
             ext = File.extname(image.file_name).delete('.')
             response['Content-Type'] = "image/#{ext}"
 
-            # Force Privacy Filter for the default route
-            # Only return raw if ALL faces are unveiled
-            all_unveiled = image.face_records.any? && image.face_records.all? do |fr|
+            # Only return raw if ALL detected faces are unveiled
+            # If no faces are detected, we still mark it as filtered for safety or just return raw.
+            # Here we follow: if any face is blurred/cloaked, it is filtered.
+            ordered_faces = image.ordered_face_records
+            all_unveiled = ordered_faces.any? && ordered_faces.all? do |fr|
               fr.effective_cloak_type == 'unveil'
             end
 
@@ -76,7 +104,7 @@ module FaceCloak
               GetImageRawFile.call(image_id: id)
             else
               response['X-Privacy-Filtered'] = 'true'
-              "PRIVACY_FILTERED_DATA_FOR_#{image.id}"
+              CloakImage.call(image: image)
             end
           end
 
