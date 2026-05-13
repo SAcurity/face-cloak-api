@@ -172,6 +172,16 @@ Implement automated face detection using the Gemini API and enable independent p
 - **Validation**:
   - Added a regression assertion to the face-record integration spec that checks a `full_*.png` cache file exists immediately after a successful respond.
 
+### 17. DB Schema Documentation Sync
+- **Documentation Issue Observed**:
+  - The DB schema docs still referenced the old static `db-schema.png` diagram and did not explicitly call out the face-detection schema additions.
+- **Fixes**:
+  - Updated `docs/schema.md` with an inline Mermaid ER diagram so the schema renders in-place without relying on the old image file.
+  - Kept the contributor README link pointing at the single canonical schema document, `docs/schema.md`.
+  - Kept the schema docs aligned with migrations `005`, `007`, and `008`: normalized face bbox fields, optional internal `landmarks`, and assignee access grants.
+- **Reason**:
+  - Face detection and cloaking depend on persisted bbox data. The docs must show those columns clearly so assignment, response, and rendering bugs can be reasoned about from the schema.
+
 ## Current Architecture
 - **Storage**: Original images are stored under the configured local image storage directory; generated full-image and patch caches are stored under `db/local/storage/cache/`.
 - **Detection**: `UploadImage` creates the image record, then `DetectFaces` reads the stored image and first calls local OpenCV YuNet through `FaceDetector`.
@@ -184,6 +194,7 @@ Implement automated face detection using the Gemini API and enable independent p
 - **Fallback Processing**: AI failures fall back to local blur for the target face area.
 - **Temp PNG Handling**: `CloakImage` prepares a working PNG in cache before rendering; if `sips` does not create the temp file, it falls back to copying the original PNG into place.
 - **Respond Flow**: Responding to a face record now refreshes the affected image cache immediately, so success or failure is observable in the respond request itself.
+- **Schema Docs**: Face-detection schema changes are documented in `docs/schema.md` with an inline Mermaid ER diagram.
 - **Integrity**: `db:drop` now clears the entire storage and cache.
 - **Test Isolation**: The test environment does not initialize the real Gemini client by default, even if `GEMINI_API_KEY` exists. Set `USE_REAL_GEMINI_IN_TEST=true` only for explicit external integration testing.
 
@@ -204,6 +215,7 @@ Implement automated face detection using the Gemini API and enable independent p
 - [x] **API**: Removed `landmarks` from public face-record response bodies while keeping them available internally.
 - [x] **Service**: Added a resilient temp PNG preparation step in `CloakImage` with fallback copy behavior when `sips` does not create the cache file.
 - [x] **Service**: Responding to a face record now rebuilds the image cache immediately instead of waiting for the next GET.
+- [x] **Docs**: Updated `docs/schema.md` with an inline Mermaid ER diagram and synced face-detection schema notes.
 - [x] **Testing**: Added direct Gemini face-detection response specs for fenced JSON, truncated JSON retry, and malformed JSON fallback.
 - [x] **Testing**: Added direct FaceDetector specs for normalization without empty landmarks, malformed detection filtering, and optional local seed-image detection when OpenCV runtime is available.
 - [x] **Testing**: Added direct CloakImage specs for bbox-first targeting with landmarks present, inactive landmark helper derivation, oversized AI patch normalization, masked AI patch write-back, deterministic local sunglasses, local filter coordinate bounds, and soft mask opacity.
