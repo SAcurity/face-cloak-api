@@ -1,0 +1,19 @@
+---
+# 3-people.png: Assign 2, 1 remains unassigned
+- image_file_name: '3-people.png'
+  face_index: 0
+  assignee_username: 'bob'
+- image_file_name: '3-people.png'
+  face_index: 1
+  assignee_username: 'charlie'
+
+# 5-people.png: Assign 3, 2 remain unassigned
+- image_file_name: '5-people.png'
+  face_index: 0
+  assignee_username: 'diana'
+- image_file_name: '5-people.png'
+  face_index: 1
+  assignee_username: 'elvis'
+- image_file_name: '5-people.png'
+  face_index: 2
+  assignee_username: 'frank'

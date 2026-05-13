@@ -5,11 +5,10 @@ module FaceCloak
   class CreateFaceRecord
     def self.call(face_data:, actor_id:)
       # 1. Create the face record
-      new_face = FaceRecord.new(face_data)
-      raise 'Could not save face record' unless new_face.save_changes
+      new_face = FaceRecord.create(face_data)
 
       # 2. Log creation
-      new_face.add_action_log(action: 'create', actor_id:)
+      new_face.add_action_log(action: 'create', actor_id: actor_id)
 
       new_face
     rescue Sequel::MassAssignmentRestriction

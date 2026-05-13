@@ -15,8 +15,9 @@ def wipe_database # rubocop:disable Metrics/AbcSize
   app.DB[:accounts_images].delete
   app.DB[:images].delete
   app.DB[:accounts_roles].delete
-  app.DB[:accounts].delete
   app.DB[:roles].delete
+  app.DB[:accounts].delete
+  # Clear physical storage
   FileUtils.rm_rf(Dir.glob("#{FaceCloak::Image::STORAGE_DIR}/*"))
 end
 
@@ -25,12 +26,16 @@ def create_account(username, email, password)
 end
 
 DATA = {} # rubocop:disable Style/MutableConstant
-DATA[:images] = YAML.safe_load_file('db/seeds/image_seeds.yml')
-DATA[:face_records] = YAML.safe_load_file('db/seeds/face_record_seeds.yml')
-DATA[:action_logs] = YAML.safe_load_file('db/seeds/action_log_seeds.yml')
+DIR = 'db/seeds'
+DATA[:images]       = YAML.load_file("#{DIR}/image_seeds.yml")
+DATA[:face_records] = YAML.load_file("#{DIR}/face_record_seeds.yml")
+DATA[:assignments]  = YAML.load_file("#{DIR}/assignments_seed.yml")
+DATA[:responses]    = YAML.load_file("#{DIR}/responses_seed.yml")
 
 def seed_attributes(record)
-  record.dup.tap do |h|
-    %w[id created_at updated_at assigned_at responded_at].each { |k| h.delete(k) }
-  end
+  return {} unless record
+
+  # Keep only the keys that are not system-managed
+  excluded_keys = %w[id created_at updated_at assigned_at responded_at owner_username image_file_name username]
+  record.except(*excluded_keys)
 end

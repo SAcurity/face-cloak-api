@@ -154,6 +154,14 @@ Install this API by cloning the relevant branch and installing required gems fro
 bundle install
 ```
 
+Install the local face detector runtime:
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements-face-detector.txt
+```
+
+The API uses OpenCV YuNet locally for face bounding boxes before falling back to Gemini detection. The YuNet model is stored at `vendor/models/face_detection_yunet_2023mar.onnx`; `.venv` is local-only and should not be committed.
+
 Copy config/secrets-example.yml to config/secrets.yml and adjust as needed:
 ```bash
 cp config/secrets-example.yml config/secrets.yml
@@ -180,6 +188,11 @@ Optional seed data:
 rake db:seed
 ```
 
+Optional detector check:
+```bash
+.venv/bin/python app/lib/opencv_face_detector.py db/seeds/files/3-people.png
+```
+
 ## Test
 Setup test database once:
 
@@ -191,6 +204,8 @@ Run the test script:
 ```bash
 rake spec
 ```
+
+If the Python detector runtime is not installed, detector-specific tests skip the local seed-image assertion and the app falls back to Gemini detection at runtime.
 
 ## Run
 Run this API using:

@@ -1,0 +1,14 @@
+---
+# Face order follows the sorted face records for each image (left to right).
+- image_file_name: '3-people.png'
+  username: 'bob'
+  cloak_type: 'unveil'
+- image_file_name: '3-people.png'
+  username: 'charlie'
+  cloak_type: 'pixelate'
+- image_file_name: '5-people.png'
+  username: 'diana'
+  cloak_type: 'mask'
+- image_file_name: '5-people.png'
+  username: 'elvis'
+  cloak_type: 'comic'

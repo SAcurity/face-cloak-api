@@ -1,13 +1,44 @@
 ---
-- image_id: 'mountain_view.png'
-  assigned_user_id: null
-  cloak_type: 'blur'
-- image_id: 'mountain_view.png'
-  assigned_user_id: 'reviewer_mina'
-  cloak_type: 'comic'
-- image_id: 'city_street.png'
-  assigned_user_id: 'reviewer_derek'
-  cloak_type: 'unveil'
-- image_id: 'city_street.png'
-  assigned_user_id: 'reviewer_mina'
-  cloak_type: 'blur'
+# Image: 3-people.png (3 faces)
+- image_file_name: '3-people.png'
+  x_min: 0.0788
+  y_min: 0.2126
+  x_max: 0.2295
+  y_max: 0.4963
+- image_file_name: '3-people.png'
+  x_min: 0.4058
+  y_min: 0.1641
+  x_max: 0.5242
+  y_max: 0.4027
+- image_file_name: '3-people.png'
+  x_min: 0.6964
+  y_min: 0.1561
+  x_max: 0.8149
+  y_max: 0.4100
+
+# Image: 5-people.png (5 faces)
+- image_file_name: '5-people.png'
+  x_min: 0.2518
+  y_min: 0.2795
+  x_max: 0.3425
+  y_max: 0.4517
+- image_file_name: '5-people.png'
+  x_min: 0.3507
+  y_min: 0.4294
+  x_max: 0.4214
+  y_max: 0.5627
+- image_file_name: '5-people.png'
+  x_min: 0.4766
+  y_min: 0.3547
+  x_max: 0.5440
+  y_max: 0.4773
+- image_file_name: '5-people.png'
+  x_min: 0.6547
+  y_min: 0.3726
+  x_max: 0.7242
+  y_max: 0.5058
+- image_file_name: '5-people.png'
+  x_min: 0.7545
+  y_min: 0.3149
+  x_max: 0.8168
+  y_max: 0.4416

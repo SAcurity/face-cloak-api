@@ -12,6 +12,12 @@ Sequel.migration do
       DateTime :responded_at
       String :cloak_type, default: 'blur'
 
+      # Bounding box coordinates (Decimals 0.0 - 1.0 or normalized)
+      Float :x_min
+      Float :y_min
+      Float :x_max
+      Float :y_max
+
       DateTime :created_at
       DateTime :updated_at
 
