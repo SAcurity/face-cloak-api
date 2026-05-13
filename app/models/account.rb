@@ -48,6 +48,7 @@ module FaceCloak
       digest.correct?(try_password)
     end
 
+    # rubocop:disable Metrics/MethodLength
     def to_h
       {
         type: 'account',
@@ -55,12 +56,19 @@ module FaceCloak
           id:,
           username:,
           email:
+        },
+        include: {
+          system_roles: system_roles.map(&:name),
+          face_assignments: face_assignments.map do |e|
+            { face_id: e.id, image_id: e.image_id, image_name: e.image.file_name, cloak_type: e.cloak_type }
+          end
         }
       }
     end
+    # rubocop:enable Metrics/MethodLength
 
     def to_json(options = {})
-      JSON({ data: to_h }, options)
+      JSON(to_h, options)
     end
   end
 end

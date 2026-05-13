@@ -20,10 +20,6 @@ API for configuring privacy controls for detected faces in images.
 - **Cloak Types**: `blur`, `pixelate`, `comic`, `sunglasses`, `mask`, `unveil`
 - **Action Types**: `create`, `assign`, `unassign`, `respond`
 
-## Database Schema
-
-<img src="./db-schema.png" alt="Database schema" width="700">
-
 ## Routes
 
 All routes return JSON except `GET` `/api/v1/images/:id` and `GET` `/api/v1/images/:id/raw`, which return binary image content.
@@ -33,9 +29,19 @@ All routes return JSON except `GET` `/api/v1/images/:id` and `GET` `/api/v1/imag
 - `GET` `/`
   Returns API metadata and resources.
 
+### Authentication
+
+- `POST /api/v1/auth/authenticate`
+  Authenticates an account and returns user details.
+  - Request body:
+    - `username`
+    - `password`
+  - Returns `200` and account data (including roles and assignments) on success.
+  - Returns `403` for invalid credentials.
+
 ### Accounts
 
-- `POST` `/api/v1/accounts`
+- `POST /api/v1/accounts`
   Creates a new account.
   - Request body:
     - `username`
@@ -44,24 +50,17 @@ All routes return JSON except `GET` `/api/v1/images/:id` and `GET` `/api/v1/imag
   - Returns `201` on success.
   - Returns `400` for invalid payload or duplicate username.
 
-- `POST` `/api/v1/accounts/authenticate`
-  Authenticates an account.
-  - Request body:
-    - `username`
-    - `password`
-  - Returns account data on success.
-  - Returns `401` for invalid credentials.
-
-- `POST` `/api/v1/accounts/search`
+- `POST /api/v1/accounts/search`
   Finds an account by email.
   - Request body:
     - `email`
   - Email lookup is performed via the stored keyed hash.
   - Returns `404` if no account matches.
 
-- `GET` `/api/v1/accounts/:username`
+- `GET /api/v1/accounts/:username`
   Returns account metadata for the given username.
   - Returns `404` if the account does not exist.
+
 
 ### Images
 
@@ -196,7 +195,7 @@ rake spec
 ## Run
 Run this API using:
 ```bash
-bundle exec puma
+rake puma
 ```
 
 Or you can rerun the API using:
@@ -204,8 +203,16 @@ Or you can rerun the API using:
 rake rerun
 ```
 
+Both commands default to port `3000`. Override it with `PORT=xxxx` when needed.
+
 ## Release Check
 Before submitting pull requests, please check if specs, style, and dependency audits pass:
 ```bash
 rake release_check
 ```
+
+## For Contributors
+
+- **Database schema** — see [`docs/schema.md`](docs/schema.md) for the
+  entity-relationship diagram and the rationale behind encrypted columns,
+  keyed-hash lookup, role enumeration, and cascade behavior.

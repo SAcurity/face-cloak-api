@@ -1,17 +1,26 @@
 # frozen_string_literal: true
 
 module FaceCloak
-  # Service object to authenticate an account
+  # Find account and check password
   class AuthenticateAccount
-    class UnauthorizedError < StandardError; end
+    # Error for invalid credentials
+    class UnauthorizedError < StandardError
+      def initialize(credentials)
+        @credentials = credentials
+        super
+      end
 
-    def self.call(username:, password:)
-      account = Account.first(username:)
-      raise UnauthorizedError, 'Invalid credentials' unless account&.password?(password)
+      def message
+        "Invalid credentials for: #{@credentials[:username]}"
+      end
+    end
+
+    def self.call(credentials)
+      account = Account.first(username: credentials[:username])
+      raise UnauthorizedError, credentials unless
+        account&.password?(credentials[:password])
 
       account
-    rescue StandardError
-      raise UnauthorizedError, 'Invalid credentials'
     end
   end
 end

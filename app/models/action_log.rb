@@ -31,7 +31,7 @@ module FaceCloak
     end
 
     def to_json(options = {})
-      JSON({ data: to_h }, options)
+      JSON(to_h, options)
     end
   end
 end
