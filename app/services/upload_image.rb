@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'fileutils'
+require 'mime/types'
 require 'securerandom'
 
 module FaceCloak
@@ -13,11 +14,10 @@ module FaceCloak
 
       # 1. Store the original file as is (no conversion here to ensure speed/success)
       ext = File.extname(original_name).downcase
-      storage_filename = "#{SecureRandom.uuid}#{ext}"
-      dest_path = File.join(Image::STORAGE_DIR, storage_filename)
+      storage_filename = "images/#{SecureRandom.uuid}#{ext}"
 
       FileUtils.mkdir_p(Image::STORAGE_DIR)
-      FileUtils.cp(temp_path, dest_path)
+      ImageStorage.put_file(storage_filename, temp_path, content_type: content_type_for(original_name))
 
       # 2. Save to Database
       new_image = Image.create(
@@ -34,6 +34,10 @@ module FaceCloak
       CloakImage.call(image: new_image)
 
       new_image
+    end
+
+    def self.content_type_for(file_name)
+      MIME::Types.type_for(file_name).first&.content_type || 'application/octet-stream'
     end
   end
 end

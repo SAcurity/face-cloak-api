@@ -8,7 +8,7 @@ Sequel.migration do
       primary_key :id
       String :username, null: false, unique: true
       String :email_secure, null: false
-      String :email_hash, null: false, index: true
+      String :email_hash, null: false, unique: true
       String :password_digest, null: false
 
       DateTime :created_at

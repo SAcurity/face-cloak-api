@@ -120,6 +120,33 @@ namespace :db do
     puts 'Cleared db/local/storage/'
   end
 
+  desc 'Bootstrap an admin role for an existing account: ADMIN_USERNAME=<username>'
+  task bootstrap_admin: :load_models do
+    username = ENV.fetch('ADMIN_USERNAME', nil).to_s.strip
+    abort 'ADMIN_USERNAME=<username> required' if username.empty?
+
+    ensure_role = lambda do |name|
+      FaceCloak::Role.first(name:) || FaceCloak::Role.create(name:)
+    rescue Sequel::UniqueConstraintViolation
+      FaceCloak::Role.first(name:)
+    end
+
+    role_names = %w[admin member]
+    role_names.each { |name| ensure_role.call(name) }
+    puts "Roles ensured: #{role_names.join(', ')}"
+
+    account = FaceCloak::Account.first(username:)
+    abort "Account not found: #{username}" unless account
+
+    admin_role = FaceCloak::Role.first(name: 'admin')
+    if account.system_roles_dataset.where(name: 'admin').any?
+      puts "- Account #{username} already has 'admin'"
+    else
+      account.add_system_role(admin_role)
+      puts "+ Granted 'admin' to #{username}"
+    end
+  end
+
   desc 'Recreate a brand-new empty dev/test database'
   task reset: :load do
     if @app.environment == :production
@@ -145,13 +172,13 @@ task reseed: %i[db:reset_seeds db:seed]
 namespace :newkey do
   desc 'Create sample cryptographic key for database'
   task :db do
-    require_app('lib', config: false)
+    require './app/lib/secure_db'
     puts "DB_KEY: #{FaceCloak::SecureDB.generate_key}"
   end
 
   desc 'Create sample cryptographic key for HMAC lookup hashing'
   task :hash do
-    require_app('lib', config: false)
+    require './app/lib/secure_db'
     puts "HASH_KEY: #{FaceCloak::SecureDB.generate_key}"
   end
 end

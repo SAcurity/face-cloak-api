@@ -29,7 +29,7 @@ module FaceCloak
       has_ai = latest_faces.any? { |f| %w[sunglasses comic mask].include?(f.effective_cloak_type) }
       return File.binread(full_cache_path) if File.exist?(full_cache_path) && !has_ai
 
-      original_path = File.join(Image::STORAGE_DIR, image.file_data)
+      original_path = ImageStorage.local_path(image.file_data)
       ws_png = File.join(CACHE_DIR, "ws_#{SecureRandom.hex}.png")
       prepare_working_png(original_path, ws_png)
       canvas = ChunkyPNG::Image.from_file(ws_png)

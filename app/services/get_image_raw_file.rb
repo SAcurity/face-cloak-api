@@ -5,10 +5,9 @@ module FaceCloak
   class GetImageRawFile
     def self.call(image_id:)
       image = Image[image_id] || raise('Image not found')
-      storage_path = File.join(Image::STORAGE_DIR, image.file_data.to_s)
-      raise 'Stored image file is missing' unless File.exist?(storage_path)
+      raise 'Stored image file is missing' unless ImageStorage.exist?(image.file_data.to_s)
 
-      File.binread(storage_path)
+      ImageStorage.get(image.file_data.to_s)
     end
   end
 end

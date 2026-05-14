@@ -6,6 +6,7 @@ require 'logger'
 require 'sequel'
 require './app/lib/secure_db'
 require './app/lib/gemini_api'
+require './app/lib/image_storage'
 
 module FaceCloak
   # Configuration for the API
@@ -41,12 +42,30 @@ module FaceCloak
     use_gemini = gemini_key && (environment != :test || ENV.fetch('USE_REAL_GEMINI_IN_TEST', nil) == 'true')
     GeminiApi.setup(gemini_key) if use_gemini
 
+    # Setup image storage
+    storage_provider = ENV.delete('STORAGE_PROVIDER')
+    storage_provider = environment == :production ? 's3' : 'local' if storage_provider.to_s.empty?
+    ImageStorage.setup(
+      provider: storage_provider,
+      bucket: ENV.delete('S3_BUCKET_NAME'),
+      region: ENV.delete('AWS_REGION'),
+      access_key_id: ENV.delete('AWS_ACCESS_KEY_ID'),
+      secret_access_key: ENV.delete('AWS_SECRET_ACCESS_KEY'),
+      endpoint: ENV.delete('S3_ENDPOINT'),
+      force_path_style: ENV.delete('S3_FORCE_PATH_STYLE') == 'true'
+    )
+
     configure :development, :production do
       plugin :common_logger, $stderr
     end
 
     configure :development, :test do
       require 'pry'
+    end
+
+    configure :production do
+      plugin :redirect_http_to_https
+      plugin :hsts
     end
   end
 end

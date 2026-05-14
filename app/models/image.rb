@@ -6,7 +6,7 @@ require 'sequel'
 module FaceCloak
   # Represents an image that can contain multiple face records.
   class Image < Sequel::Model
-    STORAGE_DIR = 'db/local/storage'
+    STORAGE_DIR = ImageStorage::LOCAL_ROOT
 
     unrestrict_primary_key
     one_to_many :face_records

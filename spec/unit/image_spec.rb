@@ -20,7 +20,7 @@ describe 'Test Image Model Unit Logic' do
     # The output might not match exactly if AI modified it or sips converted it
     _(FaceCloak::GetImageRawFile.call(image_id: img.id).length).must_be :>, 1000
     _(img.file_data.end_with?('.png')).must_equal true
-    _(File.exist?(File.join(FaceCloak::Image::STORAGE_DIR, img.file_data))).must_equal true
+    _(FaceCloak::ImageStorage.exist?(img.file_data)).must_equal true
   end
 
   it 'HAPPY: should persist seeded data to local storage on create' do
@@ -28,7 +28,7 @@ describe 'Test Image Model Unit Logic' do
     img = FaceCloak::UploadImage.call(image_data: seed_attributes(DATA[:images][0]).merge('owner_id' => @account.id))
 
     _(img.file_name).must_equal DATA[:images][0]['file_name']
-    _(File.exist?(File.join(FaceCloak::Image::STORAGE_DIR, img.file_data))).must_equal true
+    _(FaceCloak::ImageStorage.exist?(img.file_data)).must_equal true
   end
 
   it 'HAPPY: should expose face records in stable spatial order' do

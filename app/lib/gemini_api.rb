@@ -175,7 +175,7 @@ module FaceCloak
       source.each_char.with_index do |char, index|
         next if index < start_index
 
-        return index if handle_balanced_char(state, char, opener, closing)
+        return index if balanced_char_end?(state, char, opener, closing)
       end
 
       nil
