@@ -31,6 +31,15 @@ describe 'Test Account API Integration' do
     _(JSON.parse(last_response.body)['message']).must_include 'already exists'
   end
 
+  it 'SAD: should not be able to create an account with existing email' do
+    create_account('alice', 'alice@example.com', 'password123')
+    account_data = { username: 'alice2', email: 'alice@example.com', password: 'password123' }
+
+    post 'api/v1/accounts', account_data.to_json, @req_header
+    _(last_response.status).must_equal 400
+    _(JSON.parse(last_response.body)['message']).must_include 'already exists'
+  end
+
   it 'HAPPY: should be able to get account details' do
     create_account('alice', 'alice@example.com', 'password123')
 

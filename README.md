@@ -171,6 +171,9 @@ Required secrets:
 - `DATABASE_URL`
 - `DB_KEY`
 - `HASH_KEY`
+- `GEMINI_API_KEY` (optional, used for Gemini fallback face detection)
+- `STORAGE_PROVIDER` (`local` for development/test, `s3` for production)
+- `S3_BUCKET_NAME`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` when `STORAGE_PROVIDER=s3`
 
 You can generate sample keys with:
 ```bash
@@ -186,6 +189,11 @@ rake db:migrate
 Optional seed data:
 ```bash
 rake db:seed
+```
+
+Promote an existing account to admin:
+```bash
+ADMIN_USERNAME=alice rake db:bootstrap_admin
 ```
 
 Optional detector check:
@@ -220,6 +228,59 @@ rake rerun
 
 Both commands default to port `3000`. Override it with `PORT=xxxx` when needed.
 
+## Deploy to Heroku
+Create the Heroku app and attach Postgres:
+```bash
+heroku create <face-cloak-api-app-name>
+heroku addons:create heroku-postgresql --app <face-cloak-api-app-name>
+```
+
+Configure production secrets. Generate `DB_KEY` and `HASH_KEY` locally with
+`rake newkey:db` and `rake newkey:hash`, then set them on Heroku:
+```bash
+heroku config:set DB_KEY=<base64-db-key> HASH_KEY=<base64-hash-key> SECURE_SCHEME=https STORAGE_PROVIDER=s3 --app <face-cloak-api-app-name>
+heroku config:set GEMINI_API_KEY=<gemini-api-key> --app <face-cloak-api-app-name>
+```
+
+Create a private S3 bucket for image storage. Do not make the bucket public;
+the API should enforce FaceCloak ownership/privacy rules before reading image
+bytes and returning them to the Web App. Grant the IAM user only the minimum
+bucket permissions needed for this app: `s3:PutObject`, `s3:GetObject`,
+and `s3:DeleteObject` on the bucket's objects. The `HeadObject` API used for
+existence checks is covered by `s3:GetObject`.
+
+Configure S3 credentials on Heroku:
+```bash
+heroku config:set S3_BUCKET_NAME=<private-bucket-name> AWS_REGION=<aws-region> \
+  AWS_ACCESS_KEY_ID=<access-key-id> AWS_SECRET_ACCESS_KEY=<secret-access-key> \
+  --app <face-cloak-api-app-name>
+```
+
+For regular AWS S3, `S3_ENDPOINT` and `S3_FORCE_PATH_STYLE` are not needed.
+Only set them for S3-compatible providers:
+```bash
+heroku config:set S3_ENDPOINT=<provider-endpoint> S3_FORCE_PATH_STYLE=true --app <face-cloak-api-app-name>
+```
+
+Deploy and prepare the database:
+```bash
+git push heroku main
+heroku run rake db:migrate --app <face-cloak-api-app-name>
+```
+
+Create a user through `POST /api/v1/accounts`, then promote that existing user:
+```bash
+heroku run rake db:bootstrap_admin ADMIN_USERNAME=<username> --app <face-cloak-api-app-name>
+```
+
+Verify the deployed API:
+```bash
+curl https://<face-cloak-api-app-name>.herokuapp.com/
+curl -X POST https://<face-cloak-api-app-name>.herokuapp.com/api/v1/accounts \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"demo","email":"demo@example.com","password":"password123"}'
+```
+
 ## Release Check
 Before submitting pull requests, please check if specs, style, and dependency audits pass:
 ```bash
@@ -231,3 +292,6 @@ rake release_check
 - **Database schema** — see [`docs/schema.md`](docs/schema.md) for the
   entity-relationship diagram and the rationale behind encrypted columns,
   keyed-hash lookup, role enumeration, and cascade behavior.
+- **Image storage** — development/test use local files under `db/local/storage`;
+  production defaults to S3 and stores `images/<uuid>.<ext>` object keys in
+  `images.file_data`.

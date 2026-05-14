@@ -78,13 +78,12 @@ describe 'Test Image API Integration' do
   it 'HAPPY: should delete an owned image and its stored file' do
     img = FaceCloak::UploadImage.call(image_data: seed_attributes(DATA[:images][0]).merge('owner_id' => @account.id))
     storage_key = img.file_data
-    stored_path = File.join(FaceCloak::Image::STORAGE_DIR, storage_key)
 
     header 'X-Actor-Id', img.owner_id
     delete "api/v1/images/#{img.id}", nil, @req_header
     _(last_response.status).must_equal 200
     _(FaceCloak::Image[img.id]).must_be_nil
-    _(File.exist?(stored_path)).must_equal false
+    _(FaceCloak::ImageStorage.exist?(storage_key)).must_equal false
   end
 
   it 'SAD: should NOT delete an image if requester is not owner' do

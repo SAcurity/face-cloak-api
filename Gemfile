@@ -2,9 +2,10 @@
 
 source 'https://rubygems.org'
 
-ruby '4.0.2'
+ruby File.read('.ruby-version').strip
 
 # Web API
+gem 'aws-sdk-s3', '~> 1.0'
 gem 'base64'
 gem 'chunky_png'
 gem 'figaro'
@@ -26,6 +27,10 @@ group :development, :test do
   gem 'rack-test'
   gem 'sequel-seed'
   gem 'sqlite3', '~> 2.0'
+end
+
+group :production do
+  gem 'pg', '~> 1.5'
 end
 
 # Testing

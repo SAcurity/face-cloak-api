@@ -19,6 +19,7 @@ def wipe_database # rubocop:disable Metrics/AbcSize
   app.DB[:accounts].delete
   # Clear physical storage
   FileUtils.rm_rf(Dir.glob("#{FaceCloak::Image::STORAGE_DIR}/*"))
+  FileUtils.rm_rf(Dir.glob("#{FaceCloak::ImageStorage::DOWNLOAD_CACHE_DIR}/*"))
 end
 
 def create_account(username, email, password)
