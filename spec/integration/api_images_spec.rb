@@ -75,6 +75,25 @@ describe 'Test Image API Integration' do
     _(last_response.body.length).must_be :>, 1000
   end
 
+  it 'HAPPY: should suffix duplicate image file names for the same owner' do
+    img_data = DATA[:images][0]
+
+    header 'X-Actor-Id', @account.id
+    post 'api/v1/images', { file: Rack::Test::UploadedFile.new(img_data['file_data'], 'image/png') }
+    _(last_response.status).must_equal 201
+    first_result = JSON.parse(last_response.body)
+
+    header 'X-Actor-Id', @account.id
+    post 'api/v1/images', { file: Rack::Test::UploadedFile.new(img_data['file_data'], 'image/png') }
+    _(last_response.status).must_equal 201
+
+    second_result = JSON.parse(last_response.body)
+    first_name = first_result['data']['attributes']['file_name']
+    second_name = second_result['data']['attributes']['file_name']
+
+    _(second_name).must_equal "#{File.basename(first_name, '.*')}-1#{File.extname(first_name)}"
+  end
+
   it 'HAPPY: should delete an owned image and its stored file' do
     img = FaceCloak::UploadImage.call(image_data: seed_attributes(DATA[:images][0]).merge('owner_id' => @account.id))
     storage_key = img.file_data
