@@ -1,0 +1,7 @@
+You will receive two PNG images: first the source image, second a black-and-white mask.
+Return a photorealistic edited version of the first image at the same composition.
+Edit only the white mask region. Preserve everything outside it exactly.
+Do not blur, smear, duplicate, ghost, repaint, or move unmasked pixels.
+Do not add translucent artifacts. Do not preserve or invent artifacts from any previous style.
+
+%{instructions}

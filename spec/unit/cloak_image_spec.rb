@@ -69,6 +69,14 @@ describe 'Test CloakImage Unit Logic' do
     _(File.binread(output_path, 8)).must_equal "\x89PNG\r\n\x1A\n".b
   end
 
+  it 'HAPPY: uses stable AI patch cache keys per face and cloak type' do
+    face = face_record_box(0.4, 0.3, 0.6, 0.7)
+
+    cache_key = FaceCloak::CloakImage.ai_patch_cache_key(face)
+
+    _(cache_key).must_equal 'cache/patches/1/blur.png'
+  end
+
   def face_record_box(x_min, y_min, x_max, y_max, landmarks = {})
     Struct.new(:id, :effective_cloak_type, :x_min, :y_min, :x_max, :y_max, :landmarks_map)
           .new(1, 'blur', x_min, y_min, x_max, y_max, landmarks)
