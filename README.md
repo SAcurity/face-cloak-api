@@ -174,6 +174,7 @@ Required secrets:
 - `GEMINI_API_KEY` (optional, used for Gemini fallback face detection)
 - `STORAGE_PROVIDER` (`local` for development/test, `s3` for production)
 - `S3_BUCKET_NAME`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` when `STORAGE_PROVIDER=s3`
+- `ASYNC_FACE_DETECTION=false` keeps production uploads synchronous so face records exist before the upload response returns
 
 You can generate sample keys with:
 ```bash
