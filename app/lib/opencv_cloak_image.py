@@ -154,10 +154,10 @@ def ellipse_alpha_mask(width, height, feather):
 
 def context_window(face, width, height):
     left, top, face_w, face_h = bbox_pixel_coords(face, width, height)
-    context_left = max(0, left - int(face_w * 1.5))
-    context_top = max(0, top - int(face_h * 1.5))
-    context_right = min(width - 1, left + face_w + int(face_w * 1.5))
-    context_bottom = min(height - 1, top + face_h + int(face_h * 1.5))
+    context_left = max(0, left - int(face_w * 0.9))
+    context_top = max(0, top - int(face_h * 0.9))
+    context_right = min(width - 1, left + face_w + int(face_w * 0.9))
+    context_bottom = min(height - 1, top + face_h + int(face_h * 0.9))
     return {
         "cx": context_left,
         "cy": context_top,
@@ -167,6 +167,19 @@ def context_window(face, width, height):
         "fy": top - context_top,
         "fw": face_w,
         "fh": face_h,
+        "cloak_type": face.get("cloak_type") or "blur",
+    }
+
+
+def edit_region(metadata):
+    fx, fy, fw, fh = metadata["fx"], metadata["fy"], metadata["fw"], metadata["fh"]
+
+    return {
+        "mx": fx,
+        "my": fy,
+        "mw": fw,
+        "mh": fh,
+        "mask_shape": "ellipse",
     }
 
 
@@ -178,12 +191,11 @@ def prepare_ai_context(input_path, context_path, mask_path, face):
     height, width = image.shape[:2]
     metadata = context_window(face, width, height)
     cx, cy, cw, ch = metadata["cx"], metadata["cy"], metadata["cw"], metadata["ch"]
+    metadata.update(edit_region(metadata))
     context = image[cy : cy + ch, cx : cx + cw]
     mask = np.zeros((ch, cw), dtype=np.uint8)
 
-    center = (metadata["fx"] + metadata["fw"] // 2, metadata["fy"] + metadata["fh"] // 2)
-    axes = (max(1, int(metadata["fw"] / 1.5)), max(1, int(metadata["fh"] / 1.5)))
-    cv2.ellipse(mask, center, axes, 0, 0, 360, 255, thickness=-1)
+    draw_mask_shape(mask, metadata, 255)
 
     Path(context_path).parent.mkdir(parents=True, exist_ok=True)
     if not cv2.imwrite(context_path, context):
@@ -204,7 +216,7 @@ def apply_ai_patch(input_path, patch_path, output_path, metadata):
 
     cx, cy, cw, ch = metadata["cx"], metadata["cy"], metadata["cw"], metadata["ch"]
     patch = cv2.resize(patch, (cw, ch), interpolation=cv2.INTER_LINEAR)
-    mask = ai_face_alpha_mask(cw, ch, metadata["fx"], metadata["fy"], metadata["fw"], metadata["fh"])
+    mask = ai_alpha_mask(cw, ch, metadata)
     region = image[cy : cy + ch, cx : cx + cw]
     alpha = mask[:, :, np.newaxis]
     image[cy : cy + ch, cx : cx + cw] = ((patch * alpha) + (region * (1.0 - alpha))).astype(np.uint8)
@@ -214,12 +226,38 @@ def apply_ai_patch(input_path, patch_path, output_path, metadata):
         raise RuntimeError(f"Unable to write AI composed image: {output_path}")
 
 
-def ai_face_alpha_mask(width, height, fx, fy, face_w, face_h):
+def draw_mask_shape(mask, metadata, color):
+    mx, my, mw, mh = metadata["mx"], metadata["my"], metadata["mw"], metadata["mh"]
+    if metadata.get("mask_shape") == "rounded_rect":
+        radius = max(2, min(mw, mh) // 5)
+        cv2.rectangle(mask, (mx + radius, my), (mx + mw - radius, my + mh), color, thickness=-1)
+        cv2.rectangle(mask, (mx, my + radius), (mx + mw, my + mh - radius), color, thickness=-1)
+        cv2.circle(mask, (mx + radius, my + radius), radius, color, thickness=-1)
+        cv2.circle(mask, (mx + mw - radius, my + radius), radius, color, thickness=-1)
+        cv2.circle(mask, (mx + radius, my + mh - radius), radius, color, thickness=-1)
+        cv2.circle(mask, (mx + mw - radius, my + mh - radius), radius, color, thickness=-1)
+        return
+
+    center = (mx + mw // 2, my + mh // 2)
+    axes = (max(1, int(mw / 2)), max(1, int(mh / 2)))
+    cv2.ellipse(mask, center, axes, 0, 0, 360, color, thickness=-1)
+
+
+def ai_alpha_mask(width, height, metadata):
+    if metadata.get("mask_shape") == "rounded_rect":
+        hard_mask = np.zeros((height, width), dtype=np.uint8)
+        draw_mask_shape(hard_mask, metadata, 255)
+        return cv2.GaussianBlur(hard_mask, (0, 0), sigmaX=2.0).astype(np.float32) / 255.0
+
+    return ai_ellipse_alpha_mask(width, height, metadata["mx"], metadata["my"], metadata["mw"], metadata["mh"])
+
+
+def ai_ellipse_alpha_mask(width, height, mask_x, mask_y, mask_w, mask_h):
     y_indices, x_indices = np.ogrid[:height, :width]
-    rx = face_w / 2.0
-    ry = face_h / 2.0
-    cx = fx + rx
-    cy = fy + ry
+    rx = mask_w / 2.0
+    ry = mask_h / 2.0
+    cx = mask_x + rx
+    cy = mask_y + ry
     distance = np.sqrt(((x_indices - cx) ** 2 / (rx**2)) + ((y_indices - cy) ** 2 / (ry**2)))
     alpha = np.where(distance > 1.0, 0.0, np.where(distance > 0.75, (1.0 - distance) / 0.25, 1.0))
     return np.clip(alpha, 0.0, 1.0)

@@ -90,8 +90,7 @@ module FaceCloak
     end
 
     def self.image_edit_prompt(prompt)
-      'You will receive two PNG images: first the source image, second a black-and-white mask. ' \
-        "Edit only the white mask region and preserve everything outside it exactly. #{prompt}"
+      styled_prompt('image_edit_guardrails.txt', prompt)
     end
 
     def self.configure_net_http_timeout

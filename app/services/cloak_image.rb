@@ -39,14 +39,14 @@ module FaceCloak
 
     def self.prepare_cloak_inputs(source_path, faces)
       temp_paths = []
-      working_path = source_path
       local_faces = []
+      ai_patches = []
 
       faces.each do |face|
         payload = face_payload(face)
         if ai_cloak?(payload[:cloak_type])
           begin
-            working_path = apply_ai_cloak(working_path, face, temp_paths)
+            ai_patches << build_ai_patch(source_path, face, temp_paths)
           rescue GeminiApi::NoApiKeyError
             # Skip AI rendering without Gemini key; preserve the intended style as a fallback
             Api.logger.warn "AI Inpainting skipped (#{payload[:cloak_type]}): Gemini not configured"
@@ -61,6 +61,7 @@ module FaceCloak
         end
       end
 
+      working_path = compose_ai_patches(source_path, ai_patches, temp_paths)
       [local_faces, working_path, temp_paths]
     end
 
@@ -74,19 +75,38 @@ module FaceCloak
       raise "OpenCV cloak rendering failed: #{message.strip}"
     end
 
-    def self.apply_ai_cloak(input_path, face, temp_paths)
+    def self.build_ai_patch(source_path, face, temp_paths)
       context_path = temp_file_path('context')
       mask_path = temp_file_path('mask')
-      patch_path = temp_file_path('patch')
-      output_path = temp_file_path('ai')
-      temp_paths.push(context_path, mask_path, patch_path, output_path)
+      patch_key = ai_patch_cache_key(face)
+      patch_path = ai_patch_local_path(face)
+      temp_paths.push(context_path, mask_path)
 
-      metadata = prepare_ai_context(input_path:, context_path:, mask_path:, face: face_payload(face))
-      patch_blob = GeminiApi.inpaint_image(File.binread(context_path), File.binread(mask_path),
-                                           ai_prompt(face.effective_cloak_type))
-      File.binwrite(patch_path, patch_blob)
-      apply_ai_patch(input_path:, patch_path:, output_path:, metadata:)
-      output_path
+      metadata = prepare_ai_context(input_path: source_path, context_path:, mask_path:, face: face_payload(face))
+      if ImageStorage.exist?(patch_key)
+        patch_path = ImageStorage.local_path(patch_key)
+      else
+        patch_blob = GeminiApi.inpaint_image(File.binread(context_path), File.binread(mask_path),
+                                             ai_prompt(face.effective_cloak_type))
+        FileUtils.mkdir_p(File.dirname(patch_path))
+        File.binwrite(patch_path, patch_blob)
+        ImageStorage.put_file(patch_key, patch_path, content_type: 'image/png')
+      end
+      { patch_path:, metadata: }
+    end
+
+    def self.compose_ai_patches(source_path, ai_patches, temp_paths)
+      return source_path if ai_patches.empty?
+
+      working_path = source_path
+      ai_patches.each do |patch|
+        output_path = temp_file_path('ai')
+        temp_paths << output_path
+        apply_ai_patch(input_path: working_path, patch_path: patch[:patch_path], output_path:,
+                       metadata: patch[:metadata])
+        working_path = output_path
+      end
+      working_path
     end
 
     def self.prepare_ai_context(input_path:, context_path:, mask_path:, face:)
@@ -112,10 +132,13 @@ module FaceCloak
         'sunglasses' => 'CRITICAL TASK: Apply realistic dark sunglasses to this face. ' \
                         'Front-facing: Draw TWO symmetric dark lenses covering both eyes with a thin bridge. ' \
                         'Profile/side-facing: Apply sunglasses to the visible eye, fitting the face angle. ' \
+                        'Do not add a medical mask, mouth covering, dark block, or shadow below the sunglasses. ' \
                         'MUST INCLUDE: Realistic reflections, correct shading, gradient effects on lenses. ' \
                         'The result must be photorealistic and seamlessly blended with the existing lighting.',
         'mask' => 'CRITICAL TASK: Apply a medical mask to this face. ' \
-                  'The mask MUST cover the entire nose and mouth area. ' \
+                  'Only edit the nose and mouth region selected by the mask. ' \
+                  'The mask MUST cover the nose and mouth area. ' \
+                  'Do not alter the eyes, hair, background, clothing, or face position. ' \
                   'Match the fabric color and texture to common medical masks (blue, white, or similar). ' \
                   'Include proper shading and wrinkles to look realistic. ' \
                   'Ensure the mask edges blend naturally with the face. ' \
@@ -140,6 +163,14 @@ module FaceCloak
 
     def self.temp_file_path(prefix)
       File.join(CACHE_DIR, "#{prefix}_#{SecureRandom.hex}.png")
+    end
+
+    def self.ai_patch_cache_key(face)
+      File.join('cache/patches', face.id.to_s, "#{face.effective_cloak_type}.png")
+    end
+
+    def self.ai_patch_local_path(face)
+      File.join(CACHE_DIR, "patch_#{face.id}_#{face.effective_cloak_type}.png")
     end
 
     def self.face_payload(face)
