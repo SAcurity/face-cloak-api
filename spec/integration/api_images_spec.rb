@@ -30,7 +30,7 @@ describe 'Test Image API Integration' do
     get "api/v1/images/#{img.id}/raw", nil, @req_header
     _(last_response.status).must_equal 200
     _(last_response.headers['Content-Type']).must_include 'image'
-    # Flexible length check because of sips conversion
+    # Flexible length check because filtered rendering may re-encode the image.
     _(last_response.body.length).must_be :>, 1000
 
     # Also verify default route is filtered for owner

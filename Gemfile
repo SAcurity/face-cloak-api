@@ -7,7 +7,6 @@ ruby File.read('.ruby-version').strip
 # Web API
 gem 'aws-sdk-s3', '~> 1.0'
 gem 'base64'
-gem 'chunky_png'
 gem 'figaro'
 gem 'google-genai'
 gem 'json'

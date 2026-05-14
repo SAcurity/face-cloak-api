@@ -7,7 +7,7 @@ require 'securerandom'
 module FaceCloak
   # Service object to upload a new image and automatically detect faces
   class UploadImage
-    def self.call(image_data:) # rubocop:disable Metrics/MethodLength
+    def self.call(image_data:) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
       owner_id = image_data['owner_id']
       original_name = image_data['file_name']
       temp_path = image_data['file_data']
@@ -27,12 +27,8 @@ module FaceCloak
         file_data: storage_filename
       )
 
-      # 3. Trigger immediate face detection
-      DetectFaces.call(image: new_image)
-
-      # 4. PRE-WARM CACHE (This will handle format conversion internally if needed)
-      new_image.refresh
-      CloakImage.call(image: new_image)
+      # 3. Trigger face detection outside the production request path.
+      detect_after_upload(new_image)
 
       new_image
     rescue Sequel::UniqueConstraintViolation
@@ -46,6 +42,20 @@ module FaceCloak
 
     def self.content_type_for(file_name)
       MIME::Types.type_for(file_name).first&.content_type || 'application/octet-stream'
+    end
+
+    def self.detect_after_upload(image)
+      return DetectFaces.call(image:) unless async_detection?
+
+      Thread.new(image.id) do |image_id|
+        DetectFaces.call(image: Image[image_id])
+      rescue StandardError => e
+        FaceCloak::Api.logger.warn("Face detection skipped for image #{image_id}: #{e.message}")
+      end
+    end
+
+    def self.async_detection?
+      FaceCloak::Api.environment == :production && ENV.fetch('SYNC_FACE_DETECTION', nil) != 'true'
     end
 
     def self.unique_file_name(owner_id, file_name)

@@ -17,7 +17,7 @@ describe 'Test Image Model Unit Logic' do
         'file_data' => img_data['file_data']
       }
     )
-    # The output might not match exactly if AI modified it or sips converted it
+    # The output might not match exactly if rendering re-encodes it.
     _(FaceCloak::GetImageRawFile.call(image_id: img.id).length).must_be :>, 1000
     _(img.file_data.end_with?('.png')).must_equal true
     _(FaceCloak::ImageStorage.exist?(img.file_data)).must_equal true
