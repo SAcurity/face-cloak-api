@@ -99,6 +99,16 @@ describe 'Test Gemini API response handling' do
     _(image).must_equal 'edited-image'
   end
 
+  it 'HAPPY: sends source image and mask image for Gemini image editing' do
+    body = FaceCloak::GeminiApi.image_edit_request_body('add sunglasses', 'base-image', 'mask-image')
+    parts = body[:contents].first[:parts]
+
+    _(parts.length).must_equal 3
+    _(parts[0][:text]).must_include 'Edit only the white mask region'
+    _(Base64.decode64(parts[1][:inline_data][:data])).must_equal 'base-image'
+    _(Base64.decode64(parts[2][:inline_data][:data])).must_equal 'mask-image'
+  end
+
   def with_stubbed_call_api(response, &)
     with_stubbed_singleton_method(:call_api, response, &)
   end

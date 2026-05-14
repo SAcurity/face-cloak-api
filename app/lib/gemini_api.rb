@@ -26,14 +26,16 @@ module FaceCloak
       @client = Google::Genai::Client.new(api_key:, http_options: { read_timeout: 300 })
     end
 
-    def self.inpaint_image(base_image_data, _mask_image_data, prompt)
+    def self.inpaint_image(base_image_data, mask_image_data, prompt)
       raise NoApiKeyError unless @api_key
 
-      response_json = generate_image_edit(prompt, base_image_data)
-      image_base64 = extract_inline_image(response_json)
-      raise ApiError, 'No image generated' unless image_base64
+      with_single_retry('image editing', [Net::ReadTimeout, JSON::ParserError, ApiError]) do
+        response_json = generate_image_edit(prompt, base_image_data, mask_image_data)
+        image_base64 = extract_inline_image(response_json)
+        raise ApiError, 'No image generated' unless image_base64
 
-      Base64.decode64(image_base64)
+        Base64.decode64(image_base64)
+      end
     end
 
     def self.detect_faces(image_data, mime_type)
@@ -70,20 +72,26 @@ module FaceCloak
       text
     end
 
-    def self.generate_image_edit(prompt, image_data)
-      response = post_image_edit_request(prompt, image_data)
+    def self.generate_image_edit(prompt, image_data, mask_image_data)
+      response = post_image_edit_request(prompt, image_data, mask_image_data)
       parse_successful_json_response(response)
     end
 
-    def self.image_edit_request_body(prompt, image_data)
+    def self.image_edit_request_body(prompt, image_data, mask_image_data)
       {
         contents: [{
           parts: [
-            { text: prompt },
-            { inline_data: { mime_type: 'image/png', data: Base64.strict_encode64(image_data) } }
+            { text: image_edit_prompt(prompt) },
+            { inline_data: { mime_type: 'image/png', data: Base64.strict_encode64(image_data) } },
+            { inline_data: { mime_type: 'image/png', data: Base64.strict_encode64(mask_image_data) } }
           ]
         }]
       }
+    end
+
+    def self.image_edit_prompt(prompt)
+      'You will receive two PNG images: first the source image, second a black-and-white mask. ' \
+        "Edit only the white mask region and preserve everything outside it exactly. #{prompt}"
     end
 
     def self.configure_net_http_timeout
@@ -110,12 +118,12 @@ module FaceCloak
       response.text&.strip
     end
 
-    def self.post_image_edit_request(prompt, image_data)
+    def self.post_image_edit_request(prompt, image_data, mask_image_data)
       uri = URI("https://generativelanguage.googleapis.com/v1beta/models/#{IMAGE_EDIT_MODEL}:generateContent")
       request = Net::HTTP::Post.new(uri)
       request['Content-Type'] = 'application/json'
       request['x-goog-api-key'] = @api_key
-      request.body = image_edit_request_body(prompt, image_data).to_json
+      request.body = image_edit_request_body(prompt, image_data, mask_image_data).to_json
 
       response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, read_timeout: 300) do |http|
         http.request(request)

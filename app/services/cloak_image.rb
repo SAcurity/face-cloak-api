@@ -1,116 +1,157 @@
 # frozen_string_literal: true
 
-require 'chunky_png'
 require 'fileutils'
-require 'base64'
+require 'json'
 require 'open3'
 require 'securerandom'
 
 module FaceCloak
-  # Service object to apply professional privacy filters using Contextual AI Inpainting
-  # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/ParameterLists, Naming/MethodParameterName
+  # Service object to apply privacy filters through OpenCV.
+  # rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Metrics/ParameterLists
   class CloakImage
     CACHE_DIR = 'db/local/storage/cache'
+    SCRIPT_PATH = 'app/lib/opencv_cloak_image.py'
+    AI_CLOAK_TYPES = %w[sunglasses mask comic].freeze
     LOCAL_FILTER_X_PADDING = 0.08
     LOCAL_FILTER_Y_PADDING = 0.12
     SOFT_MASK_SOLID_RADIUS = 0.82
     LANDMARK_WIDTH_FACTOR = 2.6
     LANDMARK_HEIGHT_FACTOR = 2.3
 
-    def self.call(image:) # rubocop:disable Metrics/MethodLength, Metrics/AbcSize
+    def self.call(image:)
       FileUtils.mkdir_p(CACHE_DIR)
       image.refresh
-      latest_faces = image.ordered_face_records
 
-      hash = image.privacy_hash
-      full_cache_path = File.join(CACHE_DIR, "full_#{image.id}_#{hash}.png")
+      full_cache_path = File.join(CACHE_DIR, "full_#{image.id}_#{image.privacy_hash}.png")
+      return File.binread(full_cache_path) if File.exist?(full_cache_path)
 
-      # Use cache unless AI style is requested (for instant feedback during dev)
-      has_ai = latest_faces.any? { |f| %w[sunglasses comic mask].include?(f.effective_cloak_type) }
-      return File.binread(full_cache_path) if File.exist?(full_cache_path) && !has_ai
-
-      original_path = ImageStorage.local_path(image.file_data)
-      ws_png = File.join(CACHE_DIR, "ws_#{SecureRandom.hex}.png")
-      prepare_working_png(original_path, ws_png)
-      canvas = ChunkyPNG::Image.from_file(ws_png)
-      width = canvas.width
-      height = canvas.height
-
-      latest_faces.each do |face|
-        apply_face_cloak(canvas, face, width, height)
-      end
-
-      blob = canvas.to_blob
-      File.binwrite(full_cache_path, blob)
-      FileUtils.rm_f(ws_png)
-      blob
-    ensure
-      FileUtils.rm_f(ws_png) if defined?(ws_png) && ws_png && File.exist?(ws_png)
-    end
-
-    def self.prepare_working_png(original_path, ws_png)
-      FileUtils.mkdir_p(File.dirname(ws_png))
-
-      _stdout, stderr, status = Open3.capture3(
-        'sips', '-s', 'format', 'png', File.expand_path(original_path), '--out', File.expand_path(ws_png)
+      source_path = ImageStorage.local_path(image.file_data)
+      local_faces, working_path, temp_paths = prepare_cloak_inputs(source_path, image.ordered_face_records)
+      render_with_opencv(
+        input_path: working_path,
+        output_path: full_cache_path,
+        faces: local_faces
       )
-      return if status.success? && File.exist?(ws_png)
-
-      FaceCloak::Api.logger.warn("sips PNG conversion fallback for #{original_path}: #{stderr.strip}")
-      FileUtils.cp(original_path, ws_png)
-    rescue StandardError => e
-      FaceCloak::Api.logger.warn("PNG preparation fallback for #{original_path}: #{e.message}")
-      FileUtils.cp(original_path, ws_png)
+      File.binread(full_cache_path)
+    ensure
+      temp_paths&.each { |path| FileUtils.rm_f(path) }
     end
 
-    def self.apply_face_cloak(canvas, face, width, height)
-      type = face.effective_cloak_type
-      return if type == 'unveil'
+    def self.prepare_cloak_inputs(source_path, faces)
+      temp_paths = []
+      working_path = source_path
+      local_faces = []
 
-      case type
-      when 'blur', 'pixelate'
-        apply_local_cloak(canvas, face, type, width, height)
-      when 'sunglasses', 'mask', 'comic'
-        apply_ai_cloak(canvas, face, type, width, height)
+      faces.each do |face|
+        payload = face_payload(face)
+        if ai_cloak?(payload[:cloak_type])
+          begin
+            working_path = apply_ai_cloak(working_path, face, temp_paths)
+          rescue GeminiApi::NoApiKeyError
+            # Skip AI rendering without Gemini key; preserve the intended style as a fallback
+            Api.logger.warn "AI Inpainting skipped (#{payload[:cloak_type]}): Gemini not configured"
+            local_faces << ai_fallback_payload(payload)
+          rescue StandardError => e
+            # Other Gemini errors: retry once, then fallback
+            Api.logger.warn "AI Inpainting failed (#{payload[:cloak_type]}): #{e.class}: #{e.message}"
+            local_faces << ai_fallback_payload(payload)
+          end
+        else
+          local_faces << payload
+        end
       end
+
+      [local_faces, working_path, temp_paths]
     end
 
-    def self.apply_local_cloak(canvas, face, type, width, height)
-      left, top, w, h = get_pixel_coords(face, width, height)
-      return if w < 2 || h < 2
+    def self.render_with_opencv(input_path:, output_path:, faces:)
+      payload = JSON.generate(faces:)
+      stdout, stderr, status = Open3.capture3(FaceDetector.python_bin, SCRIPT_PATH, input_path, output_path,
+                                              stdin_data: payload)
+      return if status.success? && File.exist?(output_path)
 
-      case type
-      when 'blur'
-        apply_smooth_blur(canvas, left, top, w, h)
-      when 'pixelate'
-        apply_mosaic(canvas, left, top, w, h)
-      when 'sunglasses'
-        apply_sunglasses(canvas, left, top, w, h)
-      end
+      message = stderr.to_s.empty? ? stdout.to_s : stderr.to_s
+      raise "OpenCV cloak rendering failed: #{message.strip}"
     end
 
-    def self.apply_ai_cloak(canvas, face, type, width, height)
-      cx, cy, cw, ch, fx, fy, fw, fh = get_context_window(face, width, height)
-      return if cw < 2 || ch < 2 || fw < 2 || fh < 2
+    def self.apply_ai_cloak(input_path, face, temp_paths)
+      context_path = temp_file_path('context')
+      mask_path = temp_file_path('mask')
+      patch_path = temp_file_path('patch')
+      output_path = temp_file_path('ai')
+      temp_paths.push(context_path, mask_path, patch_path, output_path)
 
-      patch = get_ai_inpainted_patch(canvas, face, type, cx, cy, cw, ch, fx, fy, fw, fh)
-      patch = normalize_ai_patch(patch, cw, ch)
-      apply_ai_patch(canvas, patch, cx, cy, fx, fy, fw, fh)
-    rescue StandardError => e
-      FaceCloak::Api.logger.error "AI Inpainting Failed for #{type}: #{e.message}"
-      apply_ai_fallback(canvas, face, type, width, height)
+      metadata = prepare_ai_context(input_path:, context_path:, mask_path:, face: face_payload(face))
+      patch_blob = GeminiApi.inpaint_image(File.binread(context_path), File.binread(mask_path),
+                                           ai_prompt(face.effective_cloak_type))
+      File.binwrite(patch_path, patch_blob)
+      apply_ai_patch(input_path:, patch_path:, output_path:, metadata:)
+      output_path
     end
 
-    def self.apply_ai_fallback(canvas, face, type, width, height)
-      left, top, w, h = get_pixel_coords(face, width, height)
-      return if w < 2 || h < 2
+    def self.prepare_ai_context(input_path:, context_path:, mask_path:, face:)
+      payload = JSON.generate(face:)
+      stdout, stderr, status = Open3.capture3(FaceDetector.python_bin, SCRIPT_PATH, 'prepare-ai', input_path,
+                                              context_path, mask_path, stdin_data: payload)
+      raise "OpenCV AI context preparation failed: #{stderr.strip}" unless status.success?
 
-      case type
-      when 'sunglasses'
-        apply_sunglasses(canvas, left, top, w, h)
-      when 'mask', 'comic'
-        apply_smooth_blur(canvas, left, top, w, h)
-      end
+      JSON.parse(stdout, symbolize_names: true)
+    end
+
+    def self.apply_ai_patch(input_path:, patch_path:, output_path:, metadata:)
+      stdout, stderr, status = Open3.capture3(FaceDetector.python_bin, SCRIPT_PATH, 'apply-ai-patch', input_path,
+                                              patch_path, output_path, stdin_data: JSON.generate(metadata:))
+      return if status.success? && File.exist?(output_path)
+
+      message = stderr.to_s.empty? ? stdout.to_s : stderr.to_s
+      raise "OpenCV AI patch composition failed: #{message.strip}"
+    end
+
+    def self.ai_prompt(type)
+      prompts = {
+        'sunglasses' => 'CRITICAL TASK: Apply realistic dark sunglasses to this face. ' \
+                        'Front-facing: Draw TWO symmetric dark lenses covering both eyes with a thin bridge. ' \
+                        'Profile/side-facing: Apply sunglasses to the visible eye, fitting the face angle. ' \
+                        'MUST INCLUDE: Realistic reflections, correct shading, gradient effects on lenses. ' \
+                        'The result must be photorealistic and seamlessly blended with the existing lighting.',
+        'mask' => 'CRITICAL TASK: Apply a medical mask to this face. ' \
+                  'The mask MUST cover the entire nose and mouth area. ' \
+                  'Match the fabric color and texture to common medical masks (blue, white, or similar). ' \
+                  'Include proper shading and wrinkles to look realistic. ' \
+                  'Ensure the mask edges blend naturally with the face. ' \
+                  'This is a privacy protection task—the mask must be clearly visible.',
+        'comic' => 'CRITICAL TASK: Transform this face into pop-art comic book style. ' \
+                   'MUST APPLY: Bold black outlines around facial features. ' \
+                   'Reduce the color palette to 3-5 bright colors. ' \
+                   'Add halftone dots or comic book texture. ' \
+                   'The result must be obviously stylized and visually distinct from the original. ' \
+                   'This is an artistic transformation—the face must be unrecognizable.'
+      }
+      prompts[type] || 'Inpaint this face naturally maintaining its appearance'
+    end
+
+    def self.ai_cloak?(type)
+      AI_CLOAK_TYPES.include?(type)
+    end
+
+    def self.ai_fallback_payload(payload)
+      payload.merge(cloak_type: payload[:cloak_type] == 'sunglasses' ? 'sunglasses' : 'blur')
+    end
+
+    def self.temp_file_path(prefix)
+      File.join(CACHE_DIR, "#{prefix}_#{SecureRandom.hex}.png")
+    end
+
+    def self.face_payload(face)
+      {
+        id: face.id,
+        cloak_type: face.effective_cloak_type,
+        x_min: face.x_min,
+        y_min: face.y_min,
+        x_max: face.x_max,
+        y_max: face.y_max,
+        landmarks: face.respond_to?(:landmarks_map) ? face.landmarks_map : {}
+      }
     end
 
     def self.get_pixel_coords(face, width, height)
@@ -134,19 +175,6 @@ module FaceCloak
       r = r.clamp(l + 2, width - 1)
       b = b.clamp(t + 2, height - 1)
       [l, t, r - l, b - t]
-    end
-
-    def self.get_context_window(face, width, height)
-      l, t, fw, fh = bbox_pixel_coords(face, width, height)
-
-      # Expand by ~1.5x in each direction to provide context for AI
-      cl = [0, l - (fw * 1.5).to_i].max
-      ct = [0, t - (fh * 1.5).to_i].max
-      cr = [width - 1, l + fw + (fw * 1.5).to_i].min
-      cb = [height - 1, t + fh + (fh * 1.5).to_i].min
-
-      # Return context box, and face coordinates relative to the context box
-      [cl, ct, cr - cl, cb - ct, l - cl, t - ct, fw, fh]
     end
 
     def self.landmark_face_box(face, width, height)
@@ -220,173 +248,11 @@ module FaceCloak
       [l, t, r - l, b - t]
     end
 
-    def self.generate_mask(cw, ch, fx, fy, fw, fh)
-      mask = ChunkyPNG::Image.new(cw, ch, ChunkyPNG::Color::BLACK)
-
-      # Draw white ellipse over face, slightly larger to cover fully
-      rx = (fw / 1.5)
-      ry = (fh / 1.5)
-      cx = fx + (fw / 2.0)
-      cy = fy + (fh / 2.0)
-
-      (0...cw).each do |dx|
-        (0...ch).each do |dy|
-          dist = ((((dx - cx)**2) / (rx**2)) + (((dy - cy)**2) / (ry**2)))
-          mask.set_pixel(dx, dy, ChunkyPNG::Color::WHITE) if dist <= 1.0
-        end
-      end
-
-      mask.to_blob
-    end
-
-    def self.get_ai_inpainted_patch(canvas, face, type, cx, cy, cw, ch, fx, fy, fw, fh)
-      cache_path = File.join(CACHE_DIR, "patch_#{face.id}_#{type}.png")
-      return ChunkyPNG::Image.from_file(cache_path) if File.exist?(cache_path)
-
-      context_img = canvas.crop(cx, cy, cw, ch)
-      mask_blob = generate_mask(cw, ch, fx, fy, fw, fh)
-
-      prompts = {
-        'sunglasses' => 'A highly realistic face wearing stylish dark sunglasses, ' \
-                        'matching the lighting and blending seamlessly.',
-        'mask' => 'A highly realistic face wearing a medical mask, matching the lighting and blending seamlessly.',
-        'comic' => 'A pop-art comic book style face, blending into the surrounding image naturally.'
-      }
-
-      prompt = prompts[type] || 'Inpaint this face naturally'
-
-      processed_blob = GeminiApi.inpaint_image(context_img.to_blob, mask_blob, prompt)
-      File.binwrite(cache_path, processed_blob)
-      ChunkyPNG::Image.from_file(cache_path)
-    end
-
-    def self.normalize_ai_patch(patch, width, height)
-      return patch if patch.width == width && patch.height == height
-
-      patch.resample_bilinear(width, height)
-    end
-
-    def self.apply_ai_patch(canvas, patch, cx, cy, fx, fy, fw, fh)
-      (0...patch.width).each do |dx|
-        (0...patch.height).each do |dy|
-          alpha = ai_face_mask_alpha(dx, dy, fx, fy, fw, fh)
-          next if alpha <= 0.0
-
-          tx = cx + dx
-          ty = cy + dy
-          next if tx >= canvas.width || ty >= canvas.height
-
-          src_pixel = patch.get_pixel(dx, dy)
-          dst_pixel = canvas.get_pixel(tx, ty)
-          blended = ChunkyPNG::Color.interpolate_quick(src_pixel, dst_pixel, (alpha * 255).to_i)
-          canvas.set_pixel(tx, ty, blended)
-        end
-      end
-    end
-
-    def self.ai_face_mask_alpha(dx, dy, fx, fy, fw, fh)
-      rx = fw / 2.0
-      ry = fh / 2.0
-      cx = fx + rx
-      cy = fy + ry
-      distance = Math.sqrt((((dx - cx)**2) / (rx**2)) + (((dy - cy)**2) / (ry**2)))
-      return 0.0 if distance > 1.0
-
-      distance > 0.75 ? (1.0 - distance) / 0.25 : 1.0
-    end
-
-    # Professional Smooth Blur (Bokeh-style)
-    def self.apply_smooth_blur(canvas, left, top, w, h)
-      region = canvas.crop(left, top, w, h)
-      # Heavy downsample/upsample passes give privacy-grade soft focus.
-      [10, 14, 18].each do |factor|
-        sw = [2, w / factor.to_f].max.to_i
-        sh = [2, (h * sw.to_f / w)].max.to_i
-        region.resample_bilinear!(sw, sh)
-        region.resample_bilinear!(w, h)
-      end
-      mask_ellipse(canvas, region, left, top, w, h, true)
-    end
-
-    def self.apply_mosaic(canvas, left, top, w, h)
-      region = canvas.crop(left, top, w, h)
-      sw = [2, w / 20.0].max.to_i
-      sh = [2, (h * sw.to_f / w)].max.to_i
-      region.resample_nearest_neighbor!(sw, sh)
-      region.resample_nearest_neighbor!(w, h)
-      mask_ellipse(canvas, region, left, top, w, h, false)
-    end
-
-    def self.apply_sunglasses(canvas, left, top, w, h)
-      lens_w = [2, (w * 0.34).to_i].max
-      lens_h = [2, (h * 0.18).to_i].max
-      gap = [1, (w * 0.06).to_i].max
-      y = top + (h * 0.33).to_i
-      total_w = (lens_w * 2) + gap
-      x = left + ((w - total_w) / 2)
-
-      draw_rounded_rect(canvas, x, y, lens_w, lens_h, ChunkyPNG::Color.rgba(12, 16, 22, 245))
-      draw_rounded_rect(canvas, x + lens_w + gap, y, lens_w, lens_h, ChunkyPNG::Color.rgba(12, 16, 22, 245))
-      draw_bridge(canvas, x + lens_w, y + (lens_h / 2), gap, [1, (lens_h * 0.22).to_i].max)
-    end
-
-    def self.draw_rounded_rect(canvas, left, top, width, height, color)
-      rx = width / 2.0
-      ry = height / 2.0
-      (0...width).each do |dx|
-        (0...height).each do |dy|
-          distance = (((dx - rx)**2) / (rx**2)) + (((dy - ry)**2) / (ry**2))
-          next if distance > 1.0
-
-          set_pixel_if_in_bounds(canvas, left + dx, top + dy, color)
-        end
-      end
-    end
-
-    def self.draw_bridge(canvas, left, center_y, width, height)
-      (0...width).each do |dx|
-        (0...height).each do |dy|
-          set_pixel_if_in_bounds(canvas, left + dx, center_y - (height / 2) + dy, ChunkyPNG::Color::BLACK)
-        end
-      end
-    end
-
-    def self.set_pixel_if_in_bounds(canvas, x, y, color)
-      return if x.negative? || y.negative? || x >= canvas.width || y >= canvas.height
-
-      canvas.set_pixel(x, y, color)
-    end
-
-    def self.mask_ellipse(canvas, region, left, top, w, h, feather)
-      rx = w / 2.0
-      ry = h / 2.0
-      (0...w).each do |dx|
-        (0...h).each do |dy|
-          dist = begin
-            Math.sqrt((((dx - rx)**2) / (rx**2)) + (((dy - ry)**2) / (ry**2)))
-          rescue StandardError
-            2.0
-          end
-          next unless dist <= 1.0
-
-          alpha = feather ? soft_mask_alpha(dist) : 1.0
-          tx = left + dx
-          ty = top + dy
-          next if tx >= canvas.width || ty >= canvas.height
-
-          src_pixel = region.get_pixel(dx, dy)
-          dst_pixel = canvas.get_pixel(tx, ty)
-          blended = ChunkyPNG::Color.interpolate_quick(src_pixel, dst_pixel, (alpha * 255).to_i)
-          canvas.set_pixel(tx, ty, blended)
-        end
-      end
-    end
-
     def self.soft_mask_alpha(distance)
       return 1.0 if distance <= SOFT_MASK_SOLID_RADIUS
 
       (1.0 - distance) / (1.0 - SOFT_MASK_SOLID_RADIUS)
     end
   end
-  # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/ParameterLists, Naming/MethodParameterName
+  # rubocop:enable Metrics/AbcSize, Metrics/MethodLength, Metrics/ParameterLists
 end

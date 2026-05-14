@@ -7,7 +7,7 @@ module FaceCloak
   class DetectFaces
     def self.call(image:) # rubocop:disable Metrics/MethodLength, Metrics/AbcSize
       image_data = GetImageRawFile.call(image_id: image.id)
-      mime_type = 'image/png' # System ensures storage is PNG
+      mime_type = MIME::Types.type_for(image.file_name).first&.content_type || 'application/octet-stream'
       image_path = ImageStorage.local_path(image.file_data.to_s)
 
       # 1. Prefer local face detection for stable coordinates; Gemini is fallback.

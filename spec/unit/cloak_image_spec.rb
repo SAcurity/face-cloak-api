@@ -54,37 +54,23 @@ describe 'Test CloakImage Unit Logic' do
     _(FaceCloak::CloakImage.soft_mask_alpha(1.0)).must_equal 0.0
   end
 
-  it 'HAPPY: normalizes oversized AI patches before composing onto the source image' do
-    canvas = ChunkyPNG::Image.new(20, 20, ChunkyPNG::Color::WHITE)
-    oversized_patch = ChunkyPNG::Image.new(12, 18, ChunkyPNG::Color::BLACK)
+  it 'HAPPY: renders filtered images through OpenCV without Ruby-side PNG conversion' do
+    image_path = DATA[:images][0]['file_data']
+    output_path = File.join(FaceCloak::CloakImage::CACHE_DIR, 'opencv-unit-render.png')
+    face = face_record_box(0.4, 0.3, 0.6, 0.7)
 
-    patch = FaceCloak::CloakImage.normalize_ai_patch(oversized_patch, 10, 10)
-    canvas.compose!(patch, 10, 10)
+    FaceCloak::CloakImage.render_with_opencv(
+      input_path: image_path,
+      output_path: output_path,
+      faces: [FaceCloak::CloakImage.face_payload(face)]
+    )
 
-    _(patch.width).must_equal 10
-    _(patch.height).must_equal 10
-  end
-
-  it 'HAPPY: applies AI patches only inside the target face mask' do
-    canvas = ChunkyPNG::Image.new(20, 10, ChunkyPNG::Color::WHITE)
-    patch = ChunkyPNG::Image.new(20, 10, ChunkyPNG::Color::BLACK)
-
-    FaceCloak::CloakImage.apply_ai_patch(canvas, patch, 0, 0, 2, 2, 4, 4)
-
-    _(canvas.get_pixel(4, 4)).must_equal ChunkyPNG::Color::BLACK
-    _(canvas.get_pixel(15, 4)).must_equal ChunkyPNG::Color::WHITE
-  end
-
-  it 'HAPPY: draws sunglasses locally for deterministic visual feedback' do
-    canvas = ChunkyPNG::Image.new(100, 100, ChunkyPNG::Color::WHITE)
-
-    FaceCloak::CloakImage.apply_sunglasses(canvas, 20, 20, 60, 60)
-
-    _(canvas.get_pixel(38, 41)).wont_equal ChunkyPNG::Color::WHITE
-    _(canvas.get_pixel(62, 41)).wont_equal ChunkyPNG::Color::WHITE
+    _(File.exist?(output_path)).must_equal true
+    _(File.binread(output_path, 8)).must_equal "\x89PNG\r\n\x1A\n".b
   end
 
   def face_record_box(x_min, y_min, x_max, y_max, landmarks = {})
-    Struct.new(:x_min, :y_min, :x_max, :y_max, :landmarks_map).new(x_min, y_min, x_max, y_max, landmarks)
+    Struct.new(:id, :effective_cloak_type, :x_min, :y_min, :x_max, :y_max, :landmarks_map)
+          .new(1, 'blur', x_min, y_min, x_max, y_max, landmarks)
   end
 end
