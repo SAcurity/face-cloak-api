@@ -27,7 +27,8 @@ module FaceCloak
         file_data: storage_filename
       )
 
-      # 3. Trigger face detection outside the production request path.
+      # 3. Run detection synchronously by default so face records are persisted
+      # before the upload response returns.
       detect_after_upload(new_image)
 
       new_image
@@ -55,7 +56,7 @@ module FaceCloak
     end
 
     def self.async_detection?
-      FaceCloak::Api.environment == :production && ENV.fetch('SYNC_FACE_DETECTION', nil) != 'true'
+      FaceCloak::Api.environment == :production && ENV.fetch('ASYNC_FACE_DETECTION', nil) == 'true'
     end
 
     def self.unique_file_name(owner_id, file_name)
