@@ -11,6 +11,8 @@ require './app/lib/image_storage'
 module FaceCloak
   # Configuration for the API
   class Api < Roda
+    class StartupConfigError < StandardError; end
+
     plugin :environments
 
     # load config secrets into local environment variables (ENV)
@@ -23,8 +25,15 @@ module FaceCloak
     # Make the environment variables accessible to other classes
     def self.config = Figaro.env
 
+    required_env = lambda do |name|
+      value = ENV.delete(name)
+      raise StartupConfigError, "Missing required env var: #{name}" if value.to_s.empty?
+
+      value
+    end
+
     # Connect and make the database accessible to other classes
-    db_url = ENV.delete('DATABASE_URL')
+    db_url = required_env.call('DATABASE_URL')
     DB = Sequel.connect("#{db_url}?encoding=utf8")
     def self.DB = DB # rubocop:disable Naming/MethodName
 
@@ -33,8 +42,8 @@ module FaceCloak
     def self.logger = LOGGER
 
     # Setup SecureDB
-    db_key = ENV.delete('DB_KEY')
-    hash_key = ENV.delete('HASH_KEY')
+    db_key = required_env.call('DB_KEY')
+    hash_key = required_env.call('HASH_KEY')
     SecureDB.setup(db_key, hash_key)
 
     # Setup GeminiApi
@@ -59,7 +68,7 @@ module FaceCloak
       plugin :common_logger, $stderr
     end
 
-    configure :development, :test do
+    configure :development do
       require 'pry'
     end
 
