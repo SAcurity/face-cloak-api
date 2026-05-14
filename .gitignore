@@ -69,6 +69,3 @@ build-iPhoneSimulator/
 
 # macOS
 .DS_Store
-
-
-/vendor/models/
