@@ -11,13 +11,15 @@ module FaceCloak
 
       # GET /api/v1/images
       routing.get true do
-        output = { data: Image.all.map(&:to_h) }
+        requester_id = require_authenticated_account(routing)
+        output = { data: Image.where(owner_id: requester_id).all.map(&:to_h) }
         JSON.pretty_generate(output)
       end
 
       # POST /api/v1/images
       routing.post true do
-        new_data = parse_image_upload(routing)
+        requester_id = require_authenticated_account(routing)
+        new_data = parse_image_upload(routing, owner_id: requester_id)
         new_image = UploadImage.call(image_data: new_data)
 
         response.status = 201
@@ -28,11 +30,11 @@ module FaceCloak
       routing.on String do |id|
         routing.is 'raw' do
           routing.get do
+            requester_id = require_authenticated_account(routing)
             image = Image[id] || raise(Sequel::NoMatchingRow, 'Image not found')
 
-            # RBAC: ONLY Owner can access raw data
-            requester_id = routing.env['HTTP_X_ACTOR_ID']
-            raise ForbiddenRequest, 'You do not own this image' unless requester_id.to_i == image.owner_id
+            # Raw images are private; hide existence from non-owners.
+            raise Sequel::NoMatchingRow, 'Image not found' unless requester_id.to_i == image.owner_id
 
             ext = File.extname(image.file_name).delete('.')
             response['Content-Type'] = "image/#{ext}"
@@ -42,11 +44,11 @@ module FaceCloak
 
         routing.is 'logs' do
           routing.get do
+            requester_id = require_authenticated_account(routing)
             image = Image[id] || raise(Sequel::NoMatchingRow, 'Image not found')
 
-            # RBAC: ONLY Owner can see all logs for an image
-            requester_id = routing.env['HTTP_X_ACTOR_ID']
-            raise ForbiddenRequest, 'You do not own this image' unless requester_id.to_i == image.owner_id
+            # Image logs are private; hide existence from non-owners.
+            raise Sequel::NoMatchingRow, 'Image not found' unless requester_id.to_i == image.owner_id
 
             logs = image.face_records
                         .flat_map(&:action_logs)
@@ -61,13 +63,16 @@ module FaceCloak
           image = Image[id] || raise(Sequel::NoMatchingRow, 'Image not found')
 
           routing.get do
+            requester_id = require_authenticated_account(routing)
+            raise Sequel::NoMatchingRow, 'Image not found' unless requester_id.to_i == image.owner_id
+
             output = { data: image.ordered_face_records.map(&:to_h) }
             JSON.pretty_generate(output)
           end
 
           routing.post do
+            requester_id = require_authenticated_account(routing)
             # RBAC: Only owner can create face records for their image
-            requester_id = routing.env['HTTP_X_ACTOR_ID']
             raise ForbiddenRequest, 'You do not own this image' unless requester_id.to_i == image.owner_id
 
             new_data = HttpRequest.new(routing).body_data
@@ -110,9 +115,9 @@ module FaceCloak
 
           # DELETE /api/v1/images/:id
           routing.on method: :delete do
+            requester_id = require_authenticated_account(routing)
             image = Image[id] || raise(Sequel::NoMatchingRow, 'Image not found')
 
-            requester_id = routing.env['HTTP_X_ACTOR_ID']
             raise ForbiddenRequest, 'You do not own this image' unless requester_id.to_i == image.owner_id
 
             DeleteImage.call(image_id: id)

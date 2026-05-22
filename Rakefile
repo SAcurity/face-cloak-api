@@ -49,16 +49,43 @@ task console: :print_env do
 end
 
 # run server
+def port_listener_pids(port)
+  output = `lsof -tiTCP:#{port} -sTCP:LISTEN 2>/dev/null`
+  output.lines.map(&:strip).reject(&:empty?).map(&:to_i)
+end
+
+def process_alive?(pid)
+  Process.kill(0, pid)
+  true
+rescue Errno::ESRCH
+  false
+end
+
+def free_port(port)
+  pids = port_listener_pids(port)
+  return if pids.empty?
+
+  puts "Port #{port} is in use by PID(s): #{pids.join(', ')}"
+  pids.each { |pid| Process.kill('TERM', pid) }
+  sleep 1
+
+  stubborn_pids = pids.select { |pid| process_alive?(pid) }
+  stubborn_pids.each { |pid| Process.kill('KILL', pid) }
+  puts "Released port #{port}"
+end
+
 desc 'Run puma server'
 task :puma do
   port = ENV.fetch('PORT', '3000')
+  free_port(port)
   sh "bundle exec puma -p #{port}"
 end
 
 desc 'Run puma with automatic restart on file changes'
 task :rerun do
   port = ENV.fetch('PORT', '3000')
-  sh "bundle exec rerun --no-notify --background -- puma -p #{port}"
+  free_port(port)
+  sh "bundle exec rerun --no-notify --wait 5 --signal TERM,KILL -- bundle exec puma -p #{port}"
 end
 
 # database
@@ -180,5 +207,11 @@ namespace :newkey do
   task :hash do
     require './app/lib/secure_db'
     puts "HASH_KEY: #{FaceCloak::SecureDB.generate_key}"
+  end
+
+  desc 'Create sample cryptographic key for encrypted auth tokens'
+  task :auth do
+    require './app/lib/auth_token'
+    puts "MSG_KEY: #{FaceCloak::AuthToken.generate_key}"
   end
 end

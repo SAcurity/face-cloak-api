@@ -14,6 +14,7 @@ gem 'logger', '~> 1.0'
 gem 'mime-types'
 gem 'puma', '~> 7.0'
 gem 'rake'
+gem 'rest-client', '~> 2.1'
 gem 'roda', '~> 3.0'
 gem 'sequel'
 
@@ -36,6 +37,7 @@ end
 group :test do
   gem 'minitest'
   gem 'minitest-rg'
+  gem 'webmock'
 end
 
 # Development

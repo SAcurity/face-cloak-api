@@ -32,12 +32,35 @@ All routes return JSON except `GET` `/api/v1/images/:id` and `GET` `/api/v1/imag
 ### Authentication
 
 - `POST /api/v1/auth/authenticate`
-  Authenticates an account and returns user details.
+  Authenticates an account and returns user details plus an encrypted auth token.
   - Request body:
     - `username`
     - `password`
-  - Returns `200` and account data (including roles and assignments) on success.
+  - Returns `200` with:
+    - `type: authenticated_account`
+    - `attributes.account`: account data including roles and assignments
+    - `attributes.auth_token`: token to send on protected API requests
   - Returns `403` for invalid credentials.
+
+- `POST /api/v1/auth/register`
+  Validates a prospective email and sends a registration verification email.
+  - Request body:
+    - `email`
+    - `verification_url`
+  - Returns `202` after the email provider accepts the request.
+  - Returns `400` for duplicate email or invalid payload.
+
+Protected routes require:
+```http
+Authorization: Bearer <auth_token>
+```
+
+The API derives the current account from the encrypted token. Do not send caller identity through `X-Actor-Id`, `owner_id`, username, or user id request fields.
+
+Status-code policy:
+- `401`: missing, invalid, or expired authentication token.
+- `403`: authenticated account is attempting a forbidden operation or lacks required permissions.
+- `404`: resource does not exist or is intentionally hidden/private for the authenticated account.
 
 ### Accounts
 
@@ -65,14 +88,15 @@ All routes return JSON except `GET` `/api/v1/images/:id` and `GET` `/api/v1/imag
 ### Images
 
 - `GET` `/api/v1/images`
-  Returns all image metadata as JSON.
+  Returns metadata for images owned by the authenticated account.
+  - Requires `Authorization: Bearer <auth_token>`.
 
 - `POST` `/api/v1/images`
   Uploads an image and automatically triggers face detection.
   - Request body (Multipart):
-    - `owner_id`
     - `file` (Uploaded image)
-  - `owner_id` must belong to an existing account.
+  - Requires `Authorization: Bearer <auth_token>`.
+  - The authenticated account becomes the image owner.
   - The uploaded file is stored in local storage.
   - The API auto-creates two `FaceRecord` entries with default `blur`.
 
@@ -83,44 +107,46 @@ All routes return JSON except `GET` `/api/v1/images/:id` and `GET` `/api/v1/imag
 
 - `GET` `/api/v1/images/:id/raw`
   Returns the raw image binary regardless of face state.
-  - **Owner ONLY**: Required header `X-Actor-Id` must match the image owner.
+  - **Owner ONLY**: Bearer token account must match the image owner.
+  - Non-owner requests return `404` because raw images are intentionally hidden private resources.
 
 - `GET` `/api/v1/images/:id/logs`
   Returns all action logs for all faces belonging to the specified image.
-  - **Owner ONLY**: Required header `X-Actor-Id` must match the image owner.
+  - **Owner ONLY**: Bearer token account must match the image owner.
 
 - `DELETE` `/api/v1/images/:id`
   Deletes an image and all associated face records and action logs.
-  - **Owner ONLY**: Required header `X-Actor-Id` must match the image owner.
+  - **Owner ONLY**: Bearer token account must match the image owner.
   - Also removes the stored file from local storage.
 
 ### Face Records
 
-- `GET` `/api/v1/face_records`
-  Returns all face records as JSON.
+- `GET` `/api/v1/images/:id/face_records`
+  Returns face records for an owned image.
+  - **Owner ONLY**: Bearer token account must match the image owner.
 
-- `POST` `/api/v1/face_records`
+- `POST` `/api/v1/images/:id/face_records`
   Creates a face record for an existing image manually.
   - Request body:
-    - `image_id`
     - `cloak_type` (optional)
-  - **Owner ONLY**: Required header `X-Actor-Id` must match the image owner.
+  - **Owner ONLY**: Bearer token account must match the image owner.
   - Automatically creates a `create` action log.
 
 - `GET` `/api/v1/face_records/:id`
   Returns a single face record as JSON.
+  - **Owner or Assignee ONLY**: Bearer token account must match either the image owner or the record assignee.
 
 - `POST` `/api/v1/face_records/:id/assignment`
   Assigns a face record to a user.
   - Request body:
     - `assigned_user_id`
-  - **Owner ONLY**: Required header `X-Actor-Id` must match the image owner.
+  - **Owner ONLY**: Bearer token account must match the image owner.
   - **Constraint**: The same user can only be assigned to ONE face record within the same image.
   - Also grants image access via the `accounts_images` join table.
 
 - `DELETE` `/api/v1/face_records/:id/assignment`
   Clears the assigned user from a face record and resets its effective cloak state to `blur`.
-  - **Owner ONLY**: Required header `X-Actor-Id` must match the image owner.
+  - **Owner ONLY**: Bearer token account must match the image owner.
   - Clears `assigned_user_id`, `assigned_at`, and `responded_at`.
   - Automatically creates an `unassign` action log.
 
@@ -128,18 +154,18 @@ All routes return JSON except `GET` `/api/v1/images/:id` and `GET` `/api/v1/imag
   Updates the selected cloak type for the assigned user.
   - Request body:
     - `cloak_type`
-  - **Assignee ONLY**: Required header `X-Actor-Id` must match `assigned_user_id`.
+  - **Assignee ONLY**: Bearer token account must match `assigned_user_id`.
   - Automatically creates a `respond` action log.
 
 ### Action Logs
 
 - `GET` `/api/v1/images/:id/logs`
   Returns all action logs for all faces belonging to the specified image.
-  - **Owner ONLY**: Required header `X-Actor-Id` must match the image owner.
+  - **Owner ONLY**: Bearer token account must match the image owner.
 
 - `GET` `/api/v1/face_records/:id/logs`
   Returns all action logs for the specified face record.
-  - **Owner or Assignee ONLY**: Required header `X-Actor-Id` must match either the image owner or the record assignee.
+  - **Owner or Assignee ONLY**: Bearer token account must match either the image owner or the record assignee.
 
 ## Install
 Clone the repo first:
@@ -171,15 +197,18 @@ Required secrets:
 - `DATABASE_URL`
 - `DB_KEY`
 - `HASH_KEY`
+- `MSG_KEY`
 - `GEMINI_API_KEY` (optional, used for Gemini fallback face detection)
 - `STORAGE_PROVIDER` (`local` for development/test, `s3` for production)
 - `S3_BUCKET_NAME`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` when `STORAGE_PROVIDER=s3`
 - `ASYNC_FACE_DETECTION=false` keeps production uploads synchronous so face records exist before the upload response returns
+- `MAILGUN_API_KEY`, `MAILGUN_API_BASE_URL`, `MAILGUN_DOMAIN`, `MAILGUN_FROM_EMAIL`, `MAILGUN_FROM_NAME` for registration verification email
 
 You can generate sample keys with:
 ```bash
 rake newkey:db
 rake newkey:hash
+rake newkey:auth
 ```
 
 Setup development database once:
@@ -236,11 +265,13 @@ heroku create <face-cloak-api-app-name>
 heroku addons:create heroku-postgresql --app <face-cloak-api-app-name>
 ```
 
-Configure production secrets. Generate `DB_KEY` and `HASH_KEY` locally with
-`rake newkey:db` and `rake newkey:hash`, then set them on Heroku:
+Configure production secrets. Generate `DB_KEY`, `HASH_KEY`, and `MSG_KEY`
+locally with `rake newkey:db`, `rake newkey:hash`, and `rake newkey:auth`,
+then set them on Heroku:
 ```bash
-heroku config:set DB_KEY=<base64-db-key> HASH_KEY=<base64-hash-key> SECURE_SCHEME=https STORAGE_PROVIDER=s3 --app <face-cloak-api-app-name>
+heroku config:set DB_KEY=<base64-db-key> HASH_KEY=<base64-hash-key> MSG_KEY=<base64-msg-key> SECURE_SCHEME=https STORAGE_PROVIDER=s3 --app <face-cloak-api-app-name>
 heroku config:set GEMINI_API_KEY=<gemini-api-key> --app <face-cloak-api-app-name>
+heroku config:set MAILGUN_API_KEY=<mailgun-api-key> MAILGUN_API_BASE_URL=https://api.mailgun.net MAILGUN_DOMAIN=<mailgun-domain> MAILGUN_FROM_EMAIL=<verified-sender-email> MAILGUN_FROM_NAME=FaceCloak --app <face-cloak-api-app-name>
 ```
 
 Create a private S3 bucket for image storage. Do not make the bucket public;

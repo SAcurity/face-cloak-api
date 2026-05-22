@@ -13,6 +13,7 @@ module FaceCloak
     plugin :halt
     plugin :multi_route
     plugin :error_handler
+    plugin :request_headers
 
     error do |e|
       case e
@@ -54,6 +55,14 @@ module FaceCloak
       HttpRequest.new(routing).secure? ||
         routing.halt(403, { message: 'TLS/SSL Required' }.to_json)
 
+      begin
+        @auth_account = HttpRequest.new(routing).authenticated_account
+      rescue AuthToken::InvalidTokenError
+        routing.halt 401, { message: 'Invalid auth token' }.to_json
+      rescue AuthToken::ExpiredTokenError
+        routing.halt 401, { message: 'Expired auth token' }.to_json
+      end
+
       routing.root do
         {
           app: 'face-cloak-api',
@@ -72,13 +81,20 @@ module FaceCloak
 
     private
 
-    def parse_image_upload(routing) # rubocop:disable Metrics/MethodLength
+    def current_account_id
+      @auth_account&.dig('attributes', 'id')
+    end
+
+    def require_authenticated_account(routing)
+      account_id = current_account_id
+      routing.halt(401, { message: 'Authentication required' }.to_json) unless account_id
+
+      account_id
+    end
+
+    def parse_image_upload(routing, owner_id:) # rubocop:disable Metrics/MethodLength
       uploaded_file = routing.params['file']
       raise ArgumentError, 'file upload is required' unless uploaded_file
-
-      # Use X-Actor-Id header as the source of truth for ownership
-      owner_id = routing.env['HTTP_X_ACTOR_ID']
-      raise ArgumentError, 'X-Actor-Id header is required for upload' if owner_id.to_s.empty?
 
       # Verify account exists
       account = Account[owner_id.to_i]
