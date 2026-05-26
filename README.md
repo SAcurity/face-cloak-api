@@ -5,7 +5,7 @@ API for configuring privacy controls for detected faces in images.
 ## Core Business Rules
 
 ### 1. Automated Detection
-- When an image is uploaded via `POST` `/api/v1/images`, the system automatically "detects" faces and creates two corresponding `FaceRecord` entries.
+- When an image is uploaded via `POST` `/api/v1/images`, the system automatically detects faces and creates one `FaceRecord` entry for each detected face.
 - All new faces default to a `blur` state.
 - Duplicate file names for the same owner are automatically suffixed, such as `repeat-1.png`.
 
@@ -14,7 +14,7 @@ API for configuring privacy controls for detected faces in images.
 - **Assignee Role**: ONLY the assigned user can decide the face's `cloak_type`.
 - **Privacy Barrier**: The image owner cannot respond to a face they are not assigned to.
 - **Assignment Constraint**: A user can only be assigned to ONE face record per image.
-- **Rendered Output**: `GET` `/api/v1/images/:id` only returns raw data if the image has face records and **ALL** faces are effectively `unveil`. Otherwise it returns a privacy-filtered placeholder.
+- **Rendered Output**: `GET` `/api/v1/images/:id` only returns raw data if the image has face records and **ALL** faces are effectively `unveil`. Otherwise it returns a privacy-filtered image and sets `X-Privacy-Filtered: true`.
 
 ### 3. Supported Values
 - **Cloak Types**: `blur`, `pixelate`, `comic`, `sunglasses`, `mask`, `unveil`
@@ -49,6 +49,7 @@ All routes return JSON except `GET` `/api/v1/images/:id` and `GET` `/api/v1/imag
     - `verification_url`
   - Returns `202` after the email provider accepts the request.
   - Returns `400` for duplicate email or invalid payload.
+  - Returns `500` if the email provider rejects the request or cannot be reached.
 
 Protected routes require:
 ```http
@@ -98,12 +99,12 @@ Status-code policy:
   - Requires `Authorization: Bearer <auth_token>`.
   - The authenticated account becomes the image owner.
   - The uploaded file is stored in local storage.
-  - The API auto-creates two `FaceRecord` entries with default `blur`.
+  - The API auto-creates one `FaceRecord` entry for each detected face. Each new record defaults to effective `blur`.
 
 - `GET` `/api/v1/images/:id`
   Returns the default privacy-filtered image view.
   - **Everyone (including Owner)**: Raw binary is returned ONLY when the image has face records and ALL face records are effectively `unveil`.
-  - Otherwise the API returns `PRIVACY_FILTERED_DATA_FOR_<image_id>` and sets `X-Privacy-Filtered: true`.
+  - Otherwise the API returns a rendered privacy-filtered image and sets `X-Privacy-Filtered: true`.
 
 - `GET` `/api/v1/images/:id/raw`
   Returns the raw image binary regardless of face state.
@@ -145,9 +146,10 @@ Status-code policy:
   - Also grants image access via the `accounts_images` join table.
 
 - `DELETE` `/api/v1/face_records/:id/assignment`
-  Clears the assigned user from a face record and resets its effective cloak state to `blur`.
+  Clears the assigned user from a face record.
   - **Owner ONLY**: Bearer token account must match the image owner.
-  - Clears `assigned_user_id`, `assigned_at`, and `responded_at`.
+  - Clears `assigned_user_id` and `assigned_at`.
+  - Does not clear `cloak_type` or `responded_at`; any previously selected cloak type remains on the record.
   - Automatically creates an `unassign` action log.
 
 - `POST` `/api/v1/face_records/:id/respond`
