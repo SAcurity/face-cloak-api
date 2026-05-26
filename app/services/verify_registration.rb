@@ -8,7 +8,7 @@ require 'rest-client'
 module FaceCloak
   # Sends a verification email for prospective account registration.
   class VerifyRegistration
-    TEMPLATE_PATH = File.expand_path('../templates/emails/registration_verification.html.erb', __dir__)
+    TEMPLATE_PATH = File.expand_path('../views/emails/registration_verification.html.erb', __dir__)
 
     class InvalidRegistration < StandardError; end
     class EmailProviderError < StandardError; end
