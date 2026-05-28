@@ -30,6 +30,15 @@ module FaceCloak
       end
 
       routing.is do
+        routing.get do
+          require_authenticated_account(routing)
+          accounts = Account.order(:username).all.map do |account|
+            { id: account.id, username: account.username }
+          end
+
+          JSON.pretty_generate(data: accounts)
+        end
+
         routing.post do
           account_data = HttpRequest.new(routing).body_data
           new_account = CreateAccount.call(account_data:)

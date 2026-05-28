@@ -125,6 +125,15 @@ describe 'Test Image API Integration' do
     _(last_response.status).must_equal 404
   end
 
+  it 'SAD: should return 404 when image record exists but stored file is missing' do
+    img = FaceCloak::UploadImage.call(image_data: seed_attributes(DATA[:images][0]).merge('owner_id' => @account.id))
+    FaceCloak::ImageStorage.delete(img.file_data)
+
+    get "api/v1/images/#{img.id}/raw", nil, @req_header
+
+    _(last_response.status).must_equal 404
+  end
+
   it 'SAD: should reject an invalid auth token on protected routes' do
     get 'api/v1/images', nil, {
       'CONTENT_TYPE' => 'application/json',

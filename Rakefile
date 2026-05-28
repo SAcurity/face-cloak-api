@@ -143,8 +143,8 @@ namespace :db do
     FileUtils.rm_f(db_filename)
 
     # Clear all files in storage and cache
-    FileUtils.rm_rf(Dir.glob('db/local/storage/*'))
-    puts 'Cleared db/local/storage/'
+    FileUtils.rm_rf(Dir.glob("#{FaceCloak::ImageStorage.local_root}/*"))
+    puts "Cleared #{FaceCloak::ImageStorage.local_root}/"
   end
 
   desc 'Bootstrap an admin role for an existing account: ADMIN_USERNAME=<username>'
@@ -184,9 +184,9 @@ namespace :db do
     db_filename = @app.DB.opts[:database]
     @app.DB.disconnect
     FileUtils.rm_f(db_filename)
-    FileUtils.rm_rf(Dir.glob('db/local/storage/*'))
+    FileUtils.rm_rf(Dir.glob("#{FaceCloak::ImageStorage.local_root}/*"))
     puts "Deleted #{db_filename}"
-    puts 'Cleared db/local/storage'
+    puts "Cleared #{FaceCloak::ImageStorage.local_root}"
 
     Sequel::Migrator.run(@app.DB, 'db/migrations')
     puts 'Migrated database to latest'

@@ -61,6 +61,7 @@ module FaceCloak
     storage_provider = environment == :production ? 's3' : 'local' if storage_provider.to_s.empty?
     ImageStorage.setup(
       provider: storage_provider,
+      local_root: File.join(ImageStorage::LOCAL_ROOT, environment.to_s),
       bucket: ENV.delete('S3_BUCKET_NAME'),
       region: ENV.delete('AWS_REGION'),
       access_key_id: ENV.delete('AWS_ACCESS_KEY_ID'),

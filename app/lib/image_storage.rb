@@ -13,6 +13,7 @@ module FaceCloak
       def setup(options)
         @provider = options[:provider].to_s.empty? ? 'local' : options[:provider]
         @bucket = options[:bucket]
+        @local_root = options[:local_root].to_s.empty? ? LOCAL_ROOT : options[:local_root]
         @s3_client = build_s3_client(
           region: options[:region],
           access_key_id: options[:access_key_id],
@@ -24,6 +25,10 @@ module FaceCloak
 
       def provider
         @provider || 'local'
+      end
+
+      def local_root
+        @local_root || LOCAL_ROOT
       end
 
       def put_file(key, source_path, content_type: nil)
@@ -77,7 +82,7 @@ module FaceCloak
       end
 
       def local_file_path(key)
-        File.join(LOCAL_ROOT, key.to_s)
+        File.join(local_root, key.to_s)
       end
 
       def cached_file_path(key)

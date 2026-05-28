@@ -6,6 +6,7 @@ describe 'Test ActionType Module' do
   it 'HAPPY: should recognize valid actions' do
     _(FaceCloak::ActionType.valid?('create')).must_equal true
     _(FaceCloak::ActionType.valid?('assign')).must_equal true
+    _(FaceCloak::ActionType.valid?('decline')).must_equal true
   end
 
   it 'SAD: should identify invalid actions' do

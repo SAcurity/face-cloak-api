@@ -11,14 +11,14 @@ API for configuring privacy controls for detected faces in images.
 
 ### 2. Zero-Trust Access Control
 - **Owner Role**: Can upload images, create face records, assign face records, unassign face records, and view image-level logs.
-- **Assignee Role**: ONLY the assigned user can decide the face's `cloak_type`.
+- **Assignee Role**: ONLY the assigned user can decide the face's `cloak_type` or decline the assignment.
 - **Privacy Barrier**: The image owner cannot respond to a face they are not assigned to.
 - **Assignment Constraint**: A user can only be assigned to ONE face record per image.
 - **Rendered Output**: `GET` `/api/v1/images/:id` only returns raw data if the image has face records and **ALL** faces are effectively `unveil`. Otherwise it returns a privacy-filtered image and sets `X-Privacy-Filtered: true`.
 
 ### 3. Supported Values
 - **Cloak Types**: `blur`, `pixelate`, `comic`, `sunglasses`, `mask`, `unveil`
-- **Action Types**: `create`, `assign`, `unassign`, `respond`
+- **Action Types**: `create`, `assign`, `unassign`, `respond`, `decline`
 
 ## Routes
 
@@ -64,6 +64,12 @@ Status-code policy:
 - `404`: resource does not exist or is intentionally hidden/private for the authenticated account.
 
 ### Accounts
+
+- `GET /api/v1/accounts`
+  Returns all accounts as a minimal list.
+  - Requires `Authorization: Bearer <auth_token>`.
+  - Returns `200` with:
+    - `data`: array of accounts containing only `id` and `username`
 
 - `POST /api/v1/accounts`
   Creates a new account.
@@ -125,6 +131,8 @@ Status-code policy:
 - `GET` `/api/v1/images/:id/face_records`
   Returns face records for an owned image.
   - **Owner ONLY**: Bearer token account must match the image owner.
+  - Each face record includes `assigned_user_id`, `assigned_user`, `assigned_at`, `responded_at`, and `cloak_type`.
+  - `assigned_user` is `null` when unassigned; otherwise it contains `id` and `username`.
 
 - `POST` `/api/v1/images/:id/face_records`
   Creates a face record for an existing image manually.
@@ -136,6 +144,7 @@ Status-code policy:
 - `GET` `/api/v1/face_records/:id`
   Returns a single face record as JSON.
   - **Owner or Assignee ONLY**: Bearer token account must match either the image owner or the record assignee.
+  - Includes `assigned_user_id`, `assigned_user`, `assigned_at`, `responded_at`, and `cloak_type`.
 
 - `POST` `/api/v1/face_records/:id/assignment`
   Assigns a face record to a user.
@@ -158,6 +167,13 @@ Status-code policy:
     - `cloak_type`
   - **Assignee ONLY**: Bearer token account must match `assigned_user_id`.
   - Automatically creates a `respond` action log.
+
+- `POST` `/api/v1/face_records/:id/decline`
+  Declines the assignment for the assigned user.
+  - **Assignee ONLY**: Bearer token account must match `assigned_user_id`.
+  - Clears `assigned_user_id`, `assigned_at`, and `responded_at`.
+  - Resets `cloak_type` to `blur`.
+  - Automatically creates a `decline` action log.
 
 ### Action Logs
 
@@ -326,6 +342,7 @@ rake release_check
 - **Database schema** — see [`docs/schema.md`](docs/schema.md) for the
   entity-relationship diagram and the rationale behind encrypted columns,
   keyed-hash lookup, role enumeration, and cascade behavior.
-- **Image storage** — development/test use local files under `db/local/storage`;
+- **Image storage** — development/test use environment-specific local files
+  under `db/local/storage/<environment>`;
   production defaults to S3 and stores `images/<uuid>.<ext>` object keys in
   `images.file_data`.

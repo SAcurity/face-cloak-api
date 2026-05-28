@@ -78,6 +78,37 @@ describe 'Test FaceRecord API Integration' do
     _(face.assigned_user_id).must_equal @assignee.id
   end
 
+  it 'SAD: should reject assignment without assigned user id' do
+    face = FaceCloak::CreateFaceRecord.call(face_data: { image_id: @img.id }, actor_id: @owner.id)
+
+    post "api/v1/face_records/#{face.id}/assignment", {}.to_json, @req_header
+
+    _(last_response.status).must_equal 400
+    _(JSON.parse(last_response.body)['message']).must_equal 'assigned_user_id is required'
+  end
+
+  it 'SAD: should return 404 when assigning to unknown account' do
+    face = FaceCloak::CreateFaceRecord.call(face_data: { image_id: @img.id }, actor_id: @owner.id)
+
+    post "api/v1/face_records/#{face.id}/assignment", { assigned_user_id: 99_999 }.to_json, @req_header
+
+    _(last_response.status).must_equal 404
+  end
+
+  it 'HAPPY: should include assigned user summary in face record responses' do
+    face = FaceCloak::CreateFaceRecord.call(face_data: { image_id: @img.id }, actor_id: @owner.id)
+    FaceCloak::AssignFaceRecord.call(face_record_id: face.id, assigned_user_id: @assignee.id, actor_id: @owner.id)
+
+    get "api/v1/images/#{@img.id}/face_records", nil, @req_header
+
+    result = JSON.parse(last_response.body)
+    assigned_face = result['data'].find { |record| record['attributes']['id'] == face.id }
+    _(assigned_face['attributes']['assigned_user']).must_equal(
+      'id' => @assignee.id,
+      'username' => @assignee.username
+    )
+  end
+
   it 'SAD: should NOT be able to assign a face record if not owner' do
     face = FaceCloak::CreateFaceRecord.call(face_data: { image_id: @img.id }, actor_id: @owner.id)
 
@@ -123,6 +154,45 @@ describe 'Test FaceRecord API Integration' do
     FaceCloak::AssignFaceRecord.call(face_record_id: face.id, assigned_user_id: @assignee.id, actor_id: @owner.id)
 
     post "api/v1/face_records/#{face.id}/respond", { cloak_type: 'mask' }.to_json, @req_header
+    _(last_response.status).must_equal 403
+  end
+
+  it 'HAPPY: should allow assignee to decline a face assignment' do
+    face = FaceCloak::CreateFaceRecord.call(face_data: { image_id: @img.id }, actor_id: @owner.id)
+    FaceCloak::AssignFaceRecord.call(face_record_id: face.id, assigned_user_id: @assignee.id, actor_id: @owner.id)
+    FaceCloak::RespondToFaceRecord.call(
+      face_record_id: face.id,
+      cloak_type: 'mask',
+      actor_id: @assignee.id,
+      skip_render: true
+    )
+
+    post "api/v1/face_records/#{face.id}/decline", nil, auth_request_header(@assignee)
+    _(last_response.status).must_equal 200
+
+    face.refresh
+    _(face.assigned_user_id).must_be_nil
+    _(face.assigned_at).must_be_nil
+    _(face.responded_at).must_be_nil
+    _(face.cloak_type).must_equal 'blur'
+    _(face.action_logs.map(&:action)).must_include 'decline'
+  end
+
+  it 'SAD: should NOT allow owner to decline an assignment for the assignee' do
+    face = FaceCloak::CreateFaceRecord.call(face_data: { image_id: @img.id }, actor_id: @owner.id)
+    FaceCloak::AssignFaceRecord.call(face_record_id: face.id, assigned_user_id: @assignee.id, actor_id: @owner.id)
+
+    post "api/v1/face_records/#{face.id}/decline", nil, @req_header
+
+    _(last_response.status).must_equal 403
+  end
+
+  it 'SAD: should NOT allow stranger to decline an assignment' do
+    face = FaceCloak::CreateFaceRecord.call(face_data: { image_id: @img.id }, actor_id: @owner.id)
+    FaceCloak::AssignFaceRecord.call(face_record_id: face.id, assigned_user_id: @assignee.id, actor_id: @owner.id)
+
+    post "api/v1/face_records/#{face.id}/decline", nil, auth_request_header(@stranger)
+
     _(last_response.status).must_equal 403
   end
 

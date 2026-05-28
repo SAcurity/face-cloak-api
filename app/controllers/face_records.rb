@@ -70,6 +70,19 @@ module FaceCloak
           end
         end
 
+        routing.is 'decline' do
+          # POST /api/v1/face_records/:id/decline
+          routing.post do
+            requester_id = require_authenticated_account(routing)
+            face_record = DeclineFaceRecord.call(
+              face_record_id: id,
+              actor_id: requester_id.to_i
+            )
+
+            { message: 'Face assignment declined', data: face_record.to_h }.to_json
+          end
+        end
+
         routing.is 'logs' do
           routing.get do
             requester_id = require_authenticated_account(routing)

@@ -9,7 +9,7 @@ module FaceCloak
   # Service object to apply privacy filters through OpenCV.
   # rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Metrics/ParameterLists
   class CloakImage
-    CACHE_DIR = 'db/local/storage/cache'
+    CACHE_DIR = File.join(ImageStorage.local_root, 'cache')
     SCRIPT_PATH = 'app/lib/opencv_cloak_image.py'
     AI_CLOAK_TYPES = %w[sunglasses mask comic].freeze
     LOCAL_FILTER_X_PADDING = 0.08
