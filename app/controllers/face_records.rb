@@ -14,16 +14,22 @@ module FaceCloak
           # POST /api/v1/face_records/:id/assignment
           routing.post do
             requester_id = require_authenticated_account(routing)
+            viewer = Account.first(id: requester_id)
             face_record = FaceRecord[id] || raise(Sequel::NoMatchingRow, 'Face record not found')
-            image = face_record.image
 
-            # RBAC: Only image owner can assign
-            raise ForbiddenRequest, 'You do not own the parent image' unless requester_id.to_i == image.owner_id
+            policy = FaceRecordPolicy.new(viewer, face_record)
+            routing.halt 403, { message: 'Forbidden' }.to_json unless policy.can_assign?
 
             new_data = HttpRequest.new(routing).body_data
+
+            # Direct model operations, Tyto-style
+            unless new_data['assigned_user_id'] || new_data[:assigned_user_id]
+              raise ArgumentError, 'assigned_user_id is missing'
+            end
+
             AssignFaceRecord.call(
               face_record_id: id,
-              assigned_user_id: new_data[:assigned_user_id],
+              assigned_user_id: new_data['assigned_user_id'] || new_data[:assigned_user_id],
               actor_id: requester_id.to_i
             )
 
@@ -34,11 +40,11 @@ module FaceCloak
           # DELETE /api/v1/face_records/:id/assignment
           routing.on method: :delete do
             requester_id = require_authenticated_account(routing)
+            viewer = Account.first(id: requester_id)
             face_record = FaceRecord[id] || raise(Sequel::NoMatchingRow, 'Face record not found')
-            image = face_record.image
 
-            # RBAC: Only image owner can unassign
-            raise ForbiddenRequest, 'You do not own the parent image' unless requester_id.to_i == image.owner_id
+            policy = FaceRecordPolicy.new(viewer, face_record)
+            routing.halt 403, { message: 'Forbidden' }.to_json unless policy.can_assign?
 
             face_record.update(assigned_user_id: nil, assigned_at: nil)
             face_record.add_action_log(action: 'unassign', actor_id: requester_id.to_i)
@@ -51,12 +57,11 @@ module FaceCloak
           # POST /api/v1/face_records/:id/respond
           routing.post do
             requester_id = require_authenticated_account(routing)
+            viewer = Account.first(id: requester_id)
             face_record = FaceRecord[id] || raise(Sequel::NoMatchingRow, 'Face record not found')
 
-            # RBAC: Only assigned user can respond (Zero-Trust)
-            unless requester_id.to_i == face_record.assigned_user_id
-              raise ForbiddenRequest, 'You are not assigned to this face record'
-            end
+            policy = FaceRecordPolicy.new(viewer, face_record)
+            routing.halt 403, { message: 'Forbidden' }.to_json unless policy.can_respond?
 
             new_data = HttpRequest.new(routing).body_data
             RespondToFaceRecord.call(
@@ -74,6 +79,12 @@ module FaceCloak
           # POST /api/v1/face_records/:id/decline
           routing.post do
             requester_id = require_authenticated_account(routing)
+            viewer = Account.first(id: requester_id)
+            face_record = FaceRecord[id] || raise(Sequel::NoMatchingRow, 'Face record not found')
+
+            policy = FaceRecordPolicy.new(viewer, face_record)
+            routing.halt 403, { message: 'Forbidden' }.to_json unless policy.can_decline?
+
             face_record = DeclineFaceRecord.call(
               face_record_id: id,
               actor_id: requester_id.to_i
@@ -86,12 +97,11 @@ module FaceCloak
         routing.is 'logs' do
           routing.get do
             requester_id = require_authenticated_account(routing)
+            viewer = Account.first(id: requester_id)
             face_record = FaceRecord[id] || raise(Sequel::NoMatchingRow, 'Face record not found')
 
-            # RBAC: Only owner or assigned user can see logs for a face
-            is_owner = requester_id.to_i == face_record.image.owner_id
-            is_assignee = requester_id.to_i == face_record.assigned_user_id
-            raise Sequel::NoMatchingRow, 'Face record not found' unless is_owner || is_assignee
+            policy = FaceRecordPolicy.new(viewer, face_record)
+            routing.halt 404, { message: 'Face record not found' }.to_json unless policy.can_view_logs?
 
             output = { data: face_record.action_logs.map(&:to_h) }
             JSON.pretty_generate(output)
@@ -101,12 +111,15 @@ module FaceCloak
         # GET /api/v1/face_records/:id
         routing.get do
           requester_id = require_authenticated_account(routing)
+          viewer = Account.first(id: requester_id)
           face_record = FaceRecord[id] || raise(Sequel::NoMatchingRow, 'Face record not found')
-          is_owner = requester_id.to_i == face_record.image.owner_id
-          is_assignee = requester_id.to_i == face_record.assigned_user_id
-          raise Sequel::NoMatchingRow, 'Face record not found' unless is_owner || is_assignee
 
-          JSON.pretty_generate(face_record.to_h)
+          policy = FaceRecordPolicy.new(viewer, face_record)
+          routing.halt 404, { message: 'Face record not found' }.to_json unless policy.can_view?
+
+          output = face_record.to_h
+          output[:policies] = policy.summary
+          JSON.pretty_generate(output)
         end
       end
     end

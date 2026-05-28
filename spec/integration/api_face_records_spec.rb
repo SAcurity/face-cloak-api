@@ -81,10 +81,9 @@ describe 'Test FaceRecord API Integration' do
   it 'SAD: should reject assignment without assigned user id' do
     face = FaceCloak::CreateFaceRecord.call(face_data: { image_id: @img.id }, actor_id: @owner.id)
 
-    post "api/v1/face_records/#{face.id}/assignment", {}.to_json, @req_header
-
+    post "api/v1/face_records/#{face.id}/assignment", {}, @req_header
     _(last_response.status).must_equal 400
-    _(JSON.parse(last_response.body)['message']).must_equal 'assigned_user_id is required'
+    _(JSON.parse(last_response.body)['message']).must_include 'is missing'
   end
 
   it 'SAD: should return 404 when assigning to unknown account' do

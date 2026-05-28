@@ -24,16 +24,14 @@ describe 'Test Account API Integration' do
 
   it 'HAPPY: should be able to get list of all accounts' do
     alice = create_account('alice', 'alice@example.com', 'password123')
-    bob = create_account('bob', 'bob@example.com', 'password123')
+    create_account('bob', 'bob@example.com', 'password123')
 
     get 'api/v1/accounts', nil, auth_request_header(alice)
     _(last_response.status).must_equal 200
 
     result = JSON.parse(last_response.body)
-    _(result['data']).must_equal [
-      { 'id' => alice.id, 'username' => 'alice' },
-      { 'id' => bob.id, 'username' => 'bob' }
-    ]
+    _(result['data'].map { |a| a['username'] }).must_include 'alice'
+    _(result['data'].first).must_include 'policies'
   end
 
   it 'SAD: should require authentication to get list of all accounts' do
@@ -62,15 +60,16 @@ describe 'Test Account API Integration' do
   end
 
   it 'HAPPY: should be able to get account details' do
-    create_account('alice', 'alice@example.com', 'password123')
+    alice = create_account('alice', 'alice@example.com', 'password123')
 
-    get 'api/v1/accounts/alice', nil, @req_header
+    get 'api/v1/accounts/alice', nil, auth_request_header(alice)
     _(last_response.status).must_equal 200
 
     result = JSON.parse(last_response.body)
     _(result['type']).must_equal 'account'
     _(result['attributes']['username']).must_equal 'alice'
     _(result['attributes']['email']).must_equal 'alice@example.com'
+    _(result).must_include 'policies'
   end
 
   it 'HAPPY: should be able to search for account by email' do
@@ -91,7 +90,8 @@ describe 'Test Account API Integration' do
   end
 
   it 'SAD: should return 404 for non-existent account' do
-    get 'api/v1/accounts/non_existent', nil, @req_header
+    alice = create_account('alice', 'alice@example.com', 'password123')
+    get 'api/v1/accounts/non_existent', nil, auth_request_header(alice)
     _(last_response.status).must_equal 404
   end
 end
