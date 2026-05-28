@@ -1,0 +1,16 @@
+CRITICAL TASK: Transform this face into a classic pop-art comics portrait.
+
+Use a clean vintage comic-book illustration style similar to 1960s pop art:
+- Bold, confident black ink outlines around the face, hair, eyes, nose, mouth, jaw, and visible facial features.
+- Smooth flat color fills with a limited palette.
+- Clear expressive eyes, defined eyebrows, a readable nose, and a simple stylized mouth.
+- Stylized hair shapes with dark ink masses and a few colored highlight strokes when appropriate.
+- Halftone dot shading or Ben-Day dot texture inside the edited face region where it fits naturally.
+
+Preserve non-identifying traits such as face angle, hair silhouette, skin tone range, glasses, facial hair, and general expression.
+Make the original identity unrecognizable while keeping the portrait attractive and intentional.
+
+Do not create a horror mask, realistic photo face, blurry painting, abstract noise, black censor block, or featureless cartoon face.
+Do not remove the eyes, nose, or mouth.
+
+Keep all unmasked background and surrounding image content unchanged.

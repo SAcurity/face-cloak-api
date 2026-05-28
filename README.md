@@ -17,7 +17,7 @@ API for configuring privacy controls for detected faces in images.
 - **Rendered Output**: `GET` `/api/v1/images/:id` only returns raw data if the image has face records and **ALL** faces are effectively `unveil`. Otherwise it returns a privacy-filtered image and sets `X-Privacy-Filtered: true`.
 
 ### 3. Supported Values
-- **Cloak Types**: `blur`, `pixelate`, `comic`, `sunglasses`, `mask`, `unveil`
+- **Cloak Types**: `blur`, `pixelate`, `comics`, `sunglasses`, `mask`, `unveil`
 - **Action Types**: `create`, `assign`, `unassign`, `respond`, `decline`
 
 ## Routes
@@ -98,6 +98,7 @@ Status-code policy:
   Returns metadata for all uploaded images.
   - Requires `Authorization: Bearer <auth_token>`.
   - This list is shared across authenticated users so they can view protected image renditions.
+  - Each image includes `owner_id`, `owner` (`id`, `username`), and `created_at`.
   - Raw image access remains owner-only through `GET /api/v1/images/:id/raw`.
 
 - `POST` `/api/v1/images`

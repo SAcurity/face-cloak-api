@@ -56,7 +56,7 @@ def apply_face_cloak(image, face):
         apply_pixel_art(image, left, top, box_w, box_h)
     elif cloak_type == "sunglasses":
         apply_sunglasses(image, left, top, box_w, box_h)
-    elif cloak_type == "comic":
+    elif cloak_type in ("comic", "comics"):
         apply_comic(image, left, top, box_w, box_h)
     else:
         apply_smooth_blur(image, left, top, box_w, box_h)

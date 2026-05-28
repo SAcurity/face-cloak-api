@@ -24,6 +24,13 @@ describe 'Test Image API Integration' do
     _(result['data'].count).must_equal 3
     owner_ids = result['data'].map { |image| image['attributes']['owner_id'] }
     _(owner_ids).must_equal [@account.id, @account.id, @other_account.id]
+
+    first_image = result['data'].first['attributes']
+    _(first_image['owner']).must_equal(
+      'id' => @account.id,
+      'username' => @account.username
+    )
+    _(first_image['created_at']).wont_be_nil
   end
 
   it 'SAD: should require authentication to get all images' do

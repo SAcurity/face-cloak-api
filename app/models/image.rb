@@ -29,12 +29,27 @@ module FaceCloak
     def to_h
       {
         type: 'image',
-        attributes: {
-          id:,
-          owner_id:,
-          file_name:,
-          face_ids: ordered_face_records.map(&:id)
-        }
+        attributes: image_attributes
+      }
+    end
+
+    def image_attributes
+      {
+        id:,
+        owner_id:,
+        owner: owner_summary,
+        file_name:,
+        face_ids: ordered_face_records.map(&:id),
+        created_at:
+      }
+    end
+
+    def owner_summary
+      return nil unless owner
+
+      {
+        id: owner.id,
+        username: owner.username
       }
     end
 

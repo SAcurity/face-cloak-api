@@ -3,7 +3,7 @@
 module FaceCloak
   # Defines the supported masking options for a detected face.
   module CloakType
-    OPTIONS = %w[blur pixelate comic sunglasses mask unveil].freeze
+    OPTIONS = %w[blur pixelate comics sunglasses mask unveil].freeze
     DEFAULT = 'blur'
 
     module_function

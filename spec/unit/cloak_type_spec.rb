@@ -5,6 +5,7 @@ require_relative '../spec_helper'
 describe 'Test CloakType Module' do
   it 'HAPPY: should recognize valid cloak types' do
     _(FaceCloak::CloakType.valid?('blur')).must_equal true
+    _(FaceCloak::CloakType.valid?('comics')).must_equal true
     _(FaceCloak::CloakType.valid?('unveil')).must_equal true
   end
 

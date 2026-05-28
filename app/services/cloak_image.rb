@@ -12,7 +12,7 @@ module FaceCloak
     CACHE_DIR = File.join(ImageStorage.local_root, 'cache')
     SCRIPT_PATH = 'app/lib/opencv_cloak_image.py'
     STYLE_PROMPTS_DIR = File.expand_path('../lib/prompts/cloak_styles', __dir__)
-    AI_CLOAK_TYPES = %w[sunglasses mask comic pixelate].freeze
+    AI_CLOAK_TYPES = %w[sunglasses mask comics pixelate].freeze
     LOCAL_FILTER_X_PADDING = 0.08
     LOCAL_FILTER_Y_PADDING = 0.12
     SOFT_MASK_SOLID_RADIUS = 0.82

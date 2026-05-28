@@ -22,7 +22,7 @@ describe 'Test FaceRecord API Integration' do
   it 'HAPPY: should be able to get list of all face records for an image' do
     FaceCloak::CreateFaceRecord.call(face_data: { image_id: @img.id, cloak_type: 'blur', x_min: 0.1 },
                                      actor_id: @owner.id)
-    FaceCloak::CreateFaceRecord.call(face_data: { image_id: @img.id, cloak_type: 'comic', x_min: 0.2 },
+    FaceCloak::CreateFaceRecord.call(face_data: { image_id: @img.id, cloak_type: 'comics', x_min: 0.2 },
                                      actor_id: @owner.id)
 
     get "api/v1/images/#{@img.id}/face_records", nil, @req_header
