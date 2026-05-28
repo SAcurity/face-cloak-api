@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'io/wait'
 require './require_app'
 require 'rake/testtask'
 require 'sequel'
@@ -81,12 +82,8 @@ task :puma do
   sh "bundle exec puma -p #{port}"
 end
 
-desc 'Run puma with automatic restart on file changes'
-task :rerun do
-  port = ENV.fetch('PORT', '3000')
-  free_port(port)
-  sh "bundle exec rerun --no-notify --wait 5 --signal TERM,KILL -- bundle exec puma -p #{port}"
-end
+desc 'Run puma server (aliased as rerun)'
+task :rerun => :puma
 
 # database
 namespace :db do

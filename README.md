@@ -12,6 +12,7 @@ API for configuring privacy controls for detected faces in images.
 ### 2. Zero-Trust Access Control
 - **Owner Role**: Can upload images, create face records, assign face records, unassign face records, and view image-level logs.
 - **Assignee Role**: ONLY the assigned user can decide the face's `cloak_type` or decline the assignment.
+- **Admin Role**: System-level auditor. Can view all accounts, images, metadata, and action logs for system maintenance. However, to maintain Zero-Trust integrity, Admins **cannot** respond to face assignments or change cloak types for others.
 - **Privacy Barrier**: The image owner cannot respond to a face they are not assigned to.
 - **Assignment Constraint**: A user can only be assigned to ONE face record per image.
 - **Rendered Output**: `GET` `/api/v1/images/:id` only returns raw data if the image has face records and **ALL** faces are effectively `unveil`. Otherwise it returns a privacy-filtered image and sets `X-Privacy-Filtered: true`.

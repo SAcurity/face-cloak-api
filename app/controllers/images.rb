@@ -11,14 +11,24 @@ module FaceCloak
 
       # GET /api/v1/images
       routing.get true do
-        require_authenticated_account(routing)
-        output = { data: Image.order(:created_at, :id).all.map(&:to_h) }
-        JSON.pretty_generate(output)
+        auth_account_id = require_authenticated_account(routing)
+        viewer = Account.first(id: auth_account_id)
+
+        viewable_images = ImagePolicy::AccountScope.new(viewer).viewable
+        images_data = viewable_images.map do |image|
+          output = image.to_h
+          output[:policies] = ImagePolicy.new(viewer, image).index_summary
+          output
+        end
+
+        JSON.pretty_generate(data: images_data)
       end
 
       # POST /api/v1/images
       routing.post true do
         requester_id = require_authenticated_account(routing)
+        # NOTE: Multipart upload doesn't fit standard dry-validation schema easily,
+        # but we could validate additional metadata here if needed.
         new_data = parse_image_upload(routing, owner_id: requester_id)
         new_image = UploadImage.call(image_data: new_data)
 
@@ -31,10 +41,11 @@ module FaceCloak
         routing.is 'raw' do
           routing.get do
             requester_id = require_authenticated_account(routing)
+            viewer = Account.first(id: requester_id)
             image = Image[id] || raise(Sequel::NoMatchingRow, 'Image not found')
 
-            # Raw images are private; hide existence from non-owners.
-            raise Sequel::NoMatchingRow, 'Image not found' unless requester_id.to_i == image.owner_id
+            policy = ImagePolicy.new(viewer, image)
+            routing.halt 404, { message: 'Image not found' }.to_json unless policy.can_view_raw?
 
             ext = File.extname(image.file_name).delete('.')
             response['Content-Type'] = "image/#{ext}"
@@ -45,10 +56,11 @@ module FaceCloak
         routing.is 'logs' do
           routing.get do
             requester_id = require_authenticated_account(routing)
+            viewer = Account.first(id: requester_id)
             image = Image[id] || raise(Sequel::NoMatchingRow, 'Image not found')
 
-            # Image logs are private; hide existence from non-owners.
-            raise Sequel::NoMatchingRow, 'Image not found' unless requester_id.to_i == image.owner_id
+            policy = ImagePolicy.new(viewer, image)
+            routing.halt 404, { message: 'Image not found' }.to_json unless policy.can_view_logs?
 
             logs = image.face_records
                         .flat_map(&:action_logs)
@@ -64,18 +76,29 @@ module FaceCloak
 
           routing.get do
             requester_id = require_authenticated_account(routing)
-            raise Sequel::NoMatchingRow, 'Image not found' unless requester_id.to_i == image.owner_id
+            viewer = Account.first(id: requester_id)
 
-            output = { data: image.ordered_face_records.map(&:to_h) }
-            JSON.pretty_generate(output)
+            policy = ImagePolicy.new(viewer, image)
+            routing.halt 403, { message: 'Forbidden' }.to_json unless policy.can_view?
+
+            faces_data = image.ordered_face_records.map do |fr|
+              output = fr.to_h
+              output[:policies] = FaceRecordPolicy.new(viewer, fr).index_summary
+              output
+            end
+
+            JSON.pretty_generate(data: faces_data)
           end
 
           routing.post do
             requester_id = require_authenticated_account(routing)
-            # RBAC: Only owner can create face records for their image
-            raise ForbiddenRequest, 'You do not own this image' unless requester_id.to_i == image.owner_id
+            viewer = Account.first(id: requester_id)
+
+            policy = ImagePolicy.new(viewer, image)
+            routing.halt 403, { message: 'Forbidden' }.to_json unless policy.can_manage_faces?
 
             new_data = HttpRequest.new(routing).body_data
+            # In a real app, we might want a FaceRecordForm here.
             new_face = CreateFaceRecord.call(
               face_data: new_data.merge(image_id: image.id),
               actor_id: requester_id.to_i
@@ -89,17 +112,22 @@ module FaceCloak
         routing.is do
           # GET /api/v1/images/:id (Display protected image by default)
           routing.get do
+            auth_account_id = require_authenticated_account(routing)
+            viewer = Account.first(id: auth_account_id)
             image = Image[id] || raise(Sequel::NoMatchingRow, 'Image not found')
+
+            policy = ImagePolicy.new(viewer, image)
+            routing.halt 403, { message: 'Forbidden' }.to_json unless policy.can_view?
+
             # Force refresh to get latest face_record settings (e.g., respond changes)
             image.refresh
 
             # Set binary content type based on extension
             ext = File.extname(image.file_name).delete('.')
             response['Content-Type'] = "image/#{ext}"
+            response['X-Policy-Summary'] = ImagePolicy.new(viewer, image).summary.to_json
 
             # Only return raw if ALL detected faces are unveiled
-            # If no faces are detected, we still mark it as filtered for safety or just return raw.
-            # Here we follow: if any face is blurred/cloaked, it is filtered.
             ordered_faces = image.ordered_face_records
             all_unveiled = ordered_faces.any? && ordered_faces.all? do |fr|
               fr.effective_cloak_type == 'unveil'
@@ -116,9 +144,11 @@ module FaceCloak
           # DELETE /api/v1/images/:id
           routing.on method: :delete do
             requester_id = require_authenticated_account(routing)
+            viewer = Account.first(id: requester_id)
             image = Image[id] || raise(Sequel::NoMatchingRow, 'Image not found')
 
-            raise ForbiddenRequest, 'You do not own this image' unless requester_id.to_i == image.owner_id
+            policy = ImagePolicy.new(viewer, image)
+            routing.halt 403, { message: 'Forbidden' }.to_json unless policy.can_delete?
 
             DeleteImage.call(image_id: id)
 

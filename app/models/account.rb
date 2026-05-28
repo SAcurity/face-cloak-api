@@ -48,6 +48,10 @@ module FaceCloak
       digest.correct?(try_password)
     end
 
+    def admin?
+      system_roles.any? { |r| r.name == 'admin' }
+    end
+
     # rubocop:disable Metrics/MethodLength
     def to_h
       {
