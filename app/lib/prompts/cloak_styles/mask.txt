@@ -1,0 +1,11 @@
+CRITICAL TASK: Apply a medical mask to this face.
+
+Only edit the nose and mouth region selected by the mask.
+The mask MUST cover the nose and mouth area.
+
+Do not alter the eyes, hair, background, clothing, or face position.
+Match the fabric color and texture to common medical masks, such as blue, white, or similar.
+
+Include proper shading and wrinkles so the mask looks realistic.
+Ensure the mask edges blend naturally with the face.
+This is a privacy protection task: the mask must be clearly visible.

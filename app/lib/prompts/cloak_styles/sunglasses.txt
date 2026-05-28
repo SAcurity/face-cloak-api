@@ -1,0 +1,9 @@
+CRITICAL TASK: Apply realistic dark sunglasses to this face.
+
+Front-facing: draw two symmetric dark lenses covering both eyes with a thin bridge.
+Profile or side-facing: apply sunglasses to the visible eye, fitting the face angle.
+
+Do not add a medical mask, mouth covering, dark block, or shadow below the sunglasses.
+
+MUST INCLUDE: realistic reflections, correct shading, and gradient effects on lenses.
+The result must be photorealistic and seamlessly blended with the existing lighting.

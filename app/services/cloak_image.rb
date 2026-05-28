@@ -11,7 +11,8 @@ module FaceCloak
   class CloakImage
     CACHE_DIR = File.join(ImageStorage.local_root, 'cache')
     SCRIPT_PATH = 'app/lib/opencv_cloak_image.py'
-    AI_CLOAK_TYPES = %w[sunglasses mask comic].freeze
+    STYLE_PROMPTS_DIR = File.expand_path('../lib/prompts/cloak_styles', __dir__)
+    AI_CLOAK_TYPES = %w[sunglasses mask comic pixelate].freeze
     LOCAL_FILTER_X_PADDING = 0.08
     LOCAL_FILTER_Y_PADDING = 0.12
     SOFT_MASK_SOLID_RADIUS = 0.82
@@ -128,29 +129,10 @@ module FaceCloak
     end
 
     def self.ai_prompt(type)
-      prompts = {
-        'sunglasses' => 'CRITICAL TASK: Apply realistic dark sunglasses to this face. ' \
-                        'Front-facing: Draw TWO symmetric dark lenses covering both eyes with a thin bridge. ' \
-                        'Profile/side-facing: Apply sunglasses to the visible eye, fitting the face angle. ' \
-                        'Do not add a medical mask, mouth covering, dark block, or shadow below the sunglasses. ' \
-                        'MUST INCLUDE: Realistic reflections, correct shading, gradient effects on lenses. ' \
-                        'The result must be photorealistic and seamlessly blended with the existing lighting.',
-        'mask' => 'CRITICAL TASK: Apply a medical mask to this face. ' \
-                  'Only edit the nose and mouth region selected by the mask. ' \
-                  'The mask MUST cover the nose and mouth area. ' \
-                  'Do not alter the eyes, hair, background, clothing, or face position. ' \
-                  'Match the fabric color and texture to common medical masks (blue, white, or similar). ' \
-                  'Include proper shading and wrinkles to look realistic. ' \
-                  'Ensure the mask edges blend naturally with the face. ' \
-                  'This is a privacy protection task—the mask must be clearly visible.',
-        'comic' => 'CRITICAL TASK: Transform this face into pop-art comic book style. ' \
-                   'MUST APPLY: Bold black outlines around facial features. ' \
-                   'Reduce the color palette to 3-5 bright colors. ' \
-                   'Add halftone dots or comic book texture. ' \
-                   'The result must be obviously stylized and visually distinct from the original. ' \
-                   'This is an artistic transformation—the face must be unrecognizable.'
-      }
-      prompts[type] || 'Inpaint this face naturally maintaining its appearance'
+      prompt_path = File.join(STYLE_PROMPTS_DIR, "#{type}.txt")
+      raise ArgumentError, "Unknown AI cloak style: #{type}" unless File.exist?(prompt_path)
+
+      File.read(prompt_path).strip
     end
 
     def self.ai_cloak?(type)
@@ -158,7 +140,9 @@ module FaceCloak
     end
 
     def self.ai_fallback_payload(payload)
-      payload.merge(cloak_type: payload[:cloak_type] == 'sunglasses' ? 'sunglasses' : 'blur')
+      return payload if %w[pixelate sunglasses].include?(payload[:cloak_type])
+
+      payload.merge(cloak_type: 'blur')
     end
 
     def self.temp_file_path(prefix)

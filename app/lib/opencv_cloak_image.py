@@ -53,7 +53,7 @@ def apply_face_cloak(image, face):
         return
 
     if cloak_type == "pixelate":
-        apply_mosaic(image, left, top, box_w, box_h)
+        apply_pixel_art(image, left, top, box_w, box_h)
     elif cloak_type == "sunglasses":
         apply_sunglasses(image, left, top, box_w, box_h)
     elif cloak_type == "comic":
@@ -73,13 +73,22 @@ def apply_smooth_blur(image, left, top, width, height):
     blend_ellipse(image, blurred, left, top, feather=True)
 
 
-def apply_mosaic(image, left, top, width, height):
+def apply_pixel_art(image, left, top, width, height):
     region = image[top : top + height, left : left + width].copy()
-    small_w = max(2, int(width / 20.0))
+    small_w = clamp(int(width / 4.0), 18, 34)
     small_h = max(2, int(height * small_w / width))
     small = cv2.resize(region, (small_w, small_h), interpolation=cv2.INTER_NEAREST)
-    mosaic = cv2.resize(small, (width, height), interpolation=cv2.INTER_NEAREST)
-    blend_ellipse(image, mosaic, left, top, feather=False)
+    pixel_art = posterize_for_pixel_art(small)
+    pixel_art = cv2.resize(pixel_art, (width, height), interpolation=cv2.INTER_NEAREST)
+    blend_ellipse(image, pixel_art, left, top, feather=False)
+
+
+def posterize_for_pixel_art(image):
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV).astype(np.float32)
+    hsv[:, :, 1] = np.clip(hsv[:, :, 1] * 1.12, 0, 255)
+    hsv[:, :, 2] = np.clip((hsv[:, :, 2] * 1.04) + 6, 0, 255)
+    saturated = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
+    return ((saturated.astype(np.uint16) // 24) * 24 + 12).clip(0, 255).astype(np.uint8)
 
 
 def apply_comic(image, left, top, width, height):

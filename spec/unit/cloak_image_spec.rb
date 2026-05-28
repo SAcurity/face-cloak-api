@@ -77,6 +77,32 @@ describe 'Test CloakImage Unit Logic' do
     _(cache_key).must_equal 'cache/patches/1/blur.png'
   end
 
+  it 'HAPPY: treats pixelate as an AI pixel art cloak type' do
+    _(FaceCloak::CloakImage.ai_cloak?('pixelate')).must_equal true
+    _(FaceCloak::CloakImage.ai_prompt('pixelate')).must_include 'cute pixel art avatar'
+  end
+
+  it 'HAPPY: stores every AI cloak prompt as a text file' do
+    FaceCloak::CloakImage::AI_CLOAK_TYPES.each do |type|
+      prompt_path = File.join(FaceCloak::CloakImage::STYLE_PROMPTS_DIR, "#{type}.txt")
+
+      _(File.exist?(prompt_path)).must_equal true
+      _(FaceCloak::CloakImage.ai_prompt(type)).wont_be_empty
+    end
+  end
+
+  it 'SAD: rejects unknown AI style prompts instead of using a default' do
+    error = _(proc { FaceCloak::CloakImage.ai_prompt('unknown') }).must_raise ArgumentError
+
+    _(error.message).must_equal 'Unknown AI cloak style: unknown'
+  end
+
+  it 'HAPPY: falls back to local pixelate rendering when Gemini is unavailable' do
+    fallback = FaceCloak::CloakImage.ai_fallback_payload(cloak_type: 'pixelate')
+
+    _(fallback[:cloak_type]).must_equal 'pixelate'
+  end
+
   def face_record_box(x_min, y_min, x_max, y_max, landmarks = {})
     Struct.new(:id, :effective_cloak_type, :x_min, :y_min, :x_max, :y_max, :landmarks_map)
           .new(1, 'blur', x_min, y_min, x_max, y_max, landmarks)
