@@ -11,8 +11,8 @@ module FaceCloak
 
       # GET /api/v1/images
       routing.get true do
-        requester_id = require_authenticated_account(routing)
-        output = { data: Image.where(owner_id: requester_id).all.map(&:to_h) }
+        require_authenticated_account(routing)
+        output = { data: Image.order(:created_at, :id).all.map(&:to_h) }
         JSON.pretty_generate(output)
       end
 

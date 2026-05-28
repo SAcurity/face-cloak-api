@@ -12,7 +12,7 @@ describe 'Test Image API Integration' do
     @req_header = auth_request_header(@account)
   end
 
-  it 'HAPPY: should be able to get list of owned images' do
+  it 'HAPPY: should be able to get list of all images after authentication' do
     FaceCloak::UploadImage.call(image_data: seed_attributes(DATA[:images][0]).merge('owner_id' => @account.id))
     FaceCloak::UploadImage.call(image_data: seed_attributes(DATA[:images][1]).merge('owner_id' => @account.id))
     FaceCloak::UploadImage.call(image_data: seed_attributes(DATA[:images][0]).merge('owner_id' => @other_account.id))
@@ -21,12 +21,12 @@ describe 'Test Image API Integration' do
     _(last_response.status).must_equal 200
 
     result = JSON.parse(last_response.body)
-    _(result['data'].count).must_equal 2
+    _(result['data'].count).must_equal 3
     owner_ids = result['data'].map { |image| image['attributes']['owner_id'] }
-    _(owner_ids).must_equal [@account.id, @account.id]
+    _(owner_ids).must_equal [@account.id, @account.id, @other_account.id]
   end
 
-  it 'SAD: should require authentication to get owned images' do
+  it 'SAD: should require authentication to get all images' do
     get 'api/v1/images', nil, { 'CONTENT_TYPE' => 'application/json' }
     _(last_response.status).must_equal 401
   end

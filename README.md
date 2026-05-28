@@ -95,8 +95,10 @@ Status-code policy:
 ### Images
 
 - `GET` `/api/v1/images`
-  Returns metadata for images owned by the authenticated account.
+  Returns metadata for all uploaded images.
   - Requires `Authorization: Bearer <auth_token>`.
+  - This list is shared across authenticated users so they can view protected image renditions.
+  - Raw image access remains owner-only through `GET /api/v1/images/:id/raw`.
 
 - `POST` `/api/v1/images`
   Uploads an image and automatically triggers face detection.
