@@ -23,13 +23,13 @@ describe 'Test FaceRecord Model Unit Logic' do
     )
     FaceCloak::RespondToFaceRecord.call(
       face_record_id: face.id,
-      cloak_type: 'comic',
+      cloak_type: 'comics',
       actor_id: @account.id
     )
     face.refresh
 
     _(face.assigned_user_id).must_equal @account.id
-    _(face.cloak_type).must_equal 'comic'
+    _(face.cloak_type).must_equal 'comics'
     _(face.responded_at).wont_be_nil
   end
 

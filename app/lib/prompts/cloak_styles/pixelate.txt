@@ -1,0 +1,31 @@
+CRITICAL TASK: Transform this face into a cute pixel art avatar.
+
+Create a charming 16-bit pixel-art portrait based on the person in the selected face area.
+
+Preserve recognizable non-identifying traits such as:
+- Hair shape.
+- Skin tone range.
+- Face angle.
+- Glasses.
+- Facial hair.
+- General expression.
+
+Make the original identity unrecognizable.
+
+MUST INCLUDE clear cute pixel-art facial features:
+- Two eyes when visible.
+- A small nose.
+- A simple mouth or smile.
+
+Use medium-sized square pixels: visibly pixelated, but not so coarse that the eyes, nose, or mouth disappear.
+Use a warm limited color palette, clean square pixel edges, and a friendly game-avatar look.
+
+Do not make it:
+- A black censor block.
+- Mosaic blur.
+- A scary mask.
+- A realistic face.
+- Abstract noise.
+- An empty featureless face.
+
+Keep the head position, hair silhouette, lighting direction, and surrounding background aligned.

@@ -20,7 +20,16 @@ module FaceCloak
       raise UnauthorizedError, credentials unless
         account&.password?(credentials[:password])
 
-      account
+      account_envelope = JSON.parse(account.to_json)
+      { type: 'authenticated_account',
+        attributes: { account: account_envelope, auth_token: token_for(account_envelope, account.id) } }
+    end
+
+    def self.token_for(envelope, account_id)
+      token_envelope = envelope.merge(
+        'attributes' => envelope['attributes'].merge('id' => account_id)
+      )
+      AuthToken.new(token_envelope).to_s
     end
   end
 end

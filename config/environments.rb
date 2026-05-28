@@ -5,6 +5,7 @@ require 'figaro'
 require 'logger'
 require 'sequel'
 require './app/lib/secure_db'
+require './app/lib/auth_token'
 require './app/lib/gemini_api'
 require './app/lib/image_storage'
 
@@ -46,6 +47,10 @@ module FaceCloak
     hash_key = required_env.call('HASH_KEY')
     SecureDB.setup(db_key, hash_key)
 
+    # Setup AuthToken
+    msg_key = required_env.call('MSG_KEY')
+    AuthToken.setup(msg_key)
+
     # Setup GeminiApi
     gemini_key = ENV.delete('GEMINI_API_KEY')
     use_gemini = gemini_key && (environment != :test || ENV.fetch('USE_REAL_GEMINI_IN_TEST', nil) == 'true')
@@ -56,6 +61,7 @@ module FaceCloak
     storage_provider = environment == :production ? 's3' : 'local' if storage_provider.to_s.empty?
     ImageStorage.setup(
       provider: storage_provider,
+      local_root: File.join(ImageStorage::LOCAL_ROOT, environment.to_s),
       bucket: ENV.delete('S3_BUCKET_NAME'),
       region: ENV.delete('AWS_REGION'),
       access_key_id: ENV.delete('AWS_ACCESS_KEY_ID'),

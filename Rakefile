@@ -49,16 +49,43 @@ task console: :print_env do
 end
 
 # run server
+def port_listener_pids(port)
+  output = `lsof -tiTCP:#{port} -sTCP:LISTEN 2>/dev/null`
+  output.lines.map(&:strip).reject(&:empty?).map(&:to_i)
+end
+
+def process_alive?(pid)
+  Process.kill(0, pid)
+  true
+rescue Errno::ESRCH
+  false
+end
+
+def free_port(port)
+  pids = port_listener_pids(port)
+  return if pids.empty?
+
+  puts "Port #{port} is in use by PID(s): #{pids.join(', ')}"
+  pids.each { |pid| Process.kill('TERM', pid) }
+  sleep 1
+
+  stubborn_pids = pids.select { |pid| process_alive?(pid) }
+  stubborn_pids.each { |pid| Process.kill('KILL', pid) }
+  puts "Released port #{port}"
+end
+
 desc 'Run puma server'
 task :puma do
   port = ENV.fetch('PORT', '3000')
+  free_port(port)
   sh "bundle exec puma -p #{port}"
 end
 
 desc 'Run puma with automatic restart on file changes'
 task :rerun do
   port = ENV.fetch('PORT', '3000')
-  sh "bundle exec rerun --no-notify --background -- puma -p #{port}"
+  free_port(port)
+  sh "bundle exec rerun --no-notify --wait 5 --signal TERM,KILL -- bundle exec puma -p #{port}"
 end
 
 # database
@@ -116,8 +143,8 @@ namespace :db do
     FileUtils.rm_f(db_filename)
 
     # Clear all files in storage and cache
-    FileUtils.rm_rf(Dir.glob('db/local/storage/*'))
-    puts 'Cleared db/local/storage/'
+    FileUtils.rm_rf(Dir.glob("#{FaceCloak::ImageStorage.local_root}/*"))
+    puts "Cleared #{FaceCloak::ImageStorage.local_root}/"
   end
 
   desc 'Bootstrap an admin role for an existing account: ADMIN_USERNAME=<username>'
@@ -157,9 +184,9 @@ namespace :db do
     db_filename = @app.DB.opts[:database]
     @app.DB.disconnect
     FileUtils.rm_f(db_filename)
-    FileUtils.rm_rf(Dir.glob('db/local/storage/*'))
+    FileUtils.rm_rf(Dir.glob("#{FaceCloak::ImageStorage.local_root}/*"))
     puts "Deleted #{db_filename}"
-    puts 'Cleared db/local/storage'
+    puts "Cleared #{FaceCloak::ImageStorage.local_root}"
 
     Sequel::Migrator.run(@app.DB, 'db/migrations')
     puts 'Migrated database to latest'
@@ -180,5 +207,11 @@ namespace :newkey do
   task :hash do
     require './app/lib/secure_db'
     puts "HASH_KEY: #{FaceCloak::SecureDB.generate_key}"
+  end
+
+  desc 'Create sample cryptographic key for encrypted auth tokens'
+  task :auth do
+    require './app/lib/auth_token'
+    puts "MSG_KEY: #{FaceCloak::AuthToken.generate_key}"
   end
 end

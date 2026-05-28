@@ -3,7 +3,7 @@
 module FaceCloak
   # Defines the supported actions that can be performed on a face record.
   module ActionType
-    OPTIONS = %w[create assign unassign respond].freeze
+    OPTIONS = %w[create assign unassign respond decline].freeze
 
     module_function
 

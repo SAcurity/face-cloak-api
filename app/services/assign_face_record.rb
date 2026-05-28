@@ -7,10 +7,10 @@ module FaceCloak
 
     def self.call(face_record_id:, assigned_user_id:, actor_id:)
       face_record = FaceRecord[face_record_id] || raise('Face record not found')
+      assignee_id = normalize_assignee_id(assigned_user_id)
 
-      # Verify account exists
-      assignee = Account[assigned_user_id.to_i]
-      raise 'Account not found' unless assignee
+      assignee = Account[assignee_id]
+      raise Sequel::NoMatchingRow, 'Account not found' unless assignee
 
       # Atomically assign face
       perform_assignment(face_record, assignee.id, actor_id)
@@ -18,6 +18,13 @@ module FaceCloak
       face_record
     rescue Sequel::UniqueConstraintViolation
       raise ForbiddenError, 'User is already assigned to a face in this image'
+    end
+
+    def self.normalize_assignee_id(assigned_user_id)
+      raise ArgumentError, 'assigned_user_id is required' if assigned_user_id.to_s.empty?
+      raise ArgumentError, 'assigned_user_id must be an integer' unless assigned_user_id.to_s.match?(/\A\d+\z/)
+
+      assigned_user_id.to_i
     end
 
     def self.perform_assignment(face_record, assigned_user_id, actor_id)

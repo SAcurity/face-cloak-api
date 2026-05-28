@@ -22,6 +22,27 @@ describe 'Test Account API Integration' do
     _(result['data']['attributes']['email']).must_equal 'alice@example.com'
   end
 
+  it 'HAPPY: should be able to get list of all accounts' do
+    alice = create_account('alice', 'alice@example.com', 'password123')
+    bob = create_account('bob', 'bob@example.com', 'password123')
+
+    get 'api/v1/accounts', nil, auth_request_header(alice)
+    _(last_response.status).must_equal 200
+
+    result = JSON.parse(last_response.body)
+    _(result['data']).must_equal [
+      { 'id' => alice.id, 'username' => 'alice' },
+      { 'id' => bob.id, 'username' => 'bob' }
+    ]
+  end
+
+  it 'SAD: should require authentication to get list of all accounts' do
+    create_account('alice', 'alice@example.com', 'password123')
+
+    get 'api/v1/accounts', nil, @req_header
+    _(last_response.status).must_equal 401
+  end
+
   it 'SAD: should not be able to create an account with existing username' do
     create_account('alice', 'alice@example.com', 'password123')
     account_data = { username: 'alice', email: 'alice2@example.com', password: 'password123' }

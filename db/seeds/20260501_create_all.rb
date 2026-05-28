@@ -52,13 +52,15 @@ def assign_system_roles
 
     role_names.each do |role_name|
       role = FaceCloak::Role.first(name: role_name)
+      next if account.system_roles_dataset.where(id: role.id).any?
+
       account.add_system_role(role)
     end
   end
 end
 
 def create_images
-  FileUtils.mkdir_p(FaceCloak::Image::STORAGE_DIR)
+  FileUtils.mkdir_p(FaceCloak::ImageStorage.local_root)
   IMAGES_INFO.each do |img_info|
     owner = FaceCloak::Account.first(username: img_info['owner_username'])
     next unless owner
@@ -69,7 +71,7 @@ def create_images
 
     # Logic: generate a unique storage name (UUID) just like the actual service
     storage_filename = "#{SecureRandom.uuid}.png"
-    dest_path = File.join(FaceCloak::Image::STORAGE_DIR, storage_filename)
+    dest_path = File.join(FaceCloak::ImageStorage.local_root, storage_filename)
 
     # Use sips to ensure seed files are proper PNGs
     system("sips -s format png --deleteProperty orientation '#{src_path}' --out '#{dest_path}' > /dev/null 2>&1")

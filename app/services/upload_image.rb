@@ -17,7 +17,7 @@ module FaceCloak
       ext = File.extname(file_name).downcase
       storage_filename = "images/#{SecureRandom.uuid}#{ext}"
 
-      FileUtils.mkdir_p(Image::STORAGE_DIR)
+      FileUtils.mkdir_p(ImageStorage.local_root)
       ImageStorage.put_file(storage_filename, temp_path, content_type: content_type_for(file_name))
 
       # 2. Save to Database

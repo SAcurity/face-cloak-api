@@ -11,9 +11,8 @@ module FaceCloak
     class NoApiKeyError < StandardError; end
     class ApiError < StandardError; end
 
-    # Detection and cloak prompts intentionally share the same Gemini family.
+    # Detection and image-edit prompts intentionally share the same Gemini family.
     DETECT_MODEL = 'gemini-2.5-flash'
-    CLOAK_MODEL = 'gemini-2.5-flash'
     IMAGE_EDIT_MODEL = 'gemini-2.5-flash-image'
     PROMPTS_DIR = 'app/lib/prompts'
     DETECT_MAX_TOKENS = 4000
@@ -51,18 +50,6 @@ module FaceCloak
       []
     end
 
-    def self.cloak_image(image_data, mime_type, style_name)
-      prompt = styled_prompt('cloak_image.txt', style_name)
-      result = with_single_retry('AI', [Net::ReadTimeout, JSON::ParserError, ApiError]) do
-        response_text = call_api(CLOAK_MODEL, prompt, image_data, mime_type, 4000)
-        parse_symbolized_json(response_text)
-      end
-      image_base64 = result[:image_base64]
-      raise ApiError, 'Empty image data' if image_base64.nil? || image_base64.empty?
-
-      Base64.decode64(image_base64)
-    end
-
     def self.call_api(model, prompt, image_data, mime_type, max_tokens = 2000)
       raise NoApiKeyError unless @client
 
@@ -90,7 +77,7 @@ module FaceCloak
     end
 
     def self.image_edit_prompt(prompt)
-      styled_prompt('image_edit_guardrails.txt', prompt)
+      styled_prompt('cloak_image.txt', prompt)
     end
 
     def self.configure_net_http_timeout

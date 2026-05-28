@@ -49,6 +49,7 @@ module FaceCloak
           id:,
           image_id:,
           assigned_user_id:,
+          assigned_user: assigned_user_summary,
           assigned_at:,
           responded_at:,
           cloak_type:,
@@ -58,6 +59,15 @@ module FaceCloak
           y_max:,
           updated_at:
         }
+      }
+    end
+
+    def assigned_user_summary
+      return nil unless assigned_user
+
+      {
+        id: assigned_user.id,
+        username: assigned_user.username
       }
     end
 

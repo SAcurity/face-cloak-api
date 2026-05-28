@@ -69,3 +69,7 @@ build-iPhoneSimulator/
 
 # macOS
 .DS_Store
+
+# Python
+__pycache__/
+*.py[cod]

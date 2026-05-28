@@ -7,26 +7,41 @@ describe 'Test Image API Integration' do
 
   before do
     wipe_database
-    @req_header = { 'CONTENT_TYPE' => 'application/json' }
     @account = create_account('alice', 'alice@example.com', 'password123')
+    @other_account = create_account('bob', 'bob@example.com', 'password123')
+    @req_header = auth_request_header(@account)
   end
 
-  it 'HAPPY: should be able to get list of all images' do
+  it 'HAPPY: should be able to get list of all images after authentication' do
     FaceCloak::UploadImage.call(image_data: seed_attributes(DATA[:images][0]).merge('owner_id' => @account.id))
     FaceCloak::UploadImage.call(image_data: seed_attributes(DATA[:images][1]).merge('owner_id' => @account.id))
+    FaceCloak::UploadImage.call(image_data: seed_attributes(DATA[:images][0]).merge('owner_id' => @other_account.id))
 
     get 'api/v1/images', nil, @req_header
     _(last_response.status).must_equal 200
 
     result = JSON.parse(last_response.body)
-    _(result['data'].count).must_be :>=, 2
+    _(result['data'].count).must_equal 3
+    owner_ids = result['data'].map { |image| image['attributes']['owner_id'] }
+    _(owner_ids).must_equal [@account.id, @account.id, @other_account.id]
+
+    first_image = result['data'].first['attributes']
+    _(first_image['owner']).must_equal(
+      'id' => @account.id,
+      'username' => @account.username
+    )
+    _(first_image['created_at']).wont_be_nil
+  end
+
+  it 'SAD: should require authentication to get all images' do
+    get 'api/v1/images', nil, { 'CONTENT_TYPE' => 'application/json' }
+    _(last_response.status).must_equal 401
   end
 
   it 'HAPPY: should be able to get details of a single image' do
     img_data = DATA[:images][0]
     File.binread(img_data['file_data'])
     img = FaceCloak::UploadImage.call(image_data: seed_attributes(img_data).merge('owner_id' => @account.id))
-    header 'X-Actor-Id', img.owner_id
     get "api/v1/images/#{img.id}/raw", nil, @req_header
     _(last_response.status).must_equal 200
     _(last_response.headers['Content-Type']).must_include 'image'
@@ -43,8 +58,7 @@ describe 'Test Image API Integration' do
     img_data = DATA[:images][0]
     img = FaceCloak::UploadImage.call(image_data: seed_attributes(img_data).merge('owner_id' => @account.id))
 
-    header 'X-Actor-Id', 999_999
-    get "api/v1/images/#{img.id}", nil, @req_header
+    get "api/v1/images/#{img.id}", nil, auth_request_header(@other_account)
     _(last_response.status).must_equal 200
     _(last_response.headers['X-Privacy-Filtered']).must_equal 'true'
     _(last_response.body.length).must_be :>, 1000
@@ -60,8 +74,7 @@ describe 'Test Image API Integration' do
     img_data = DATA[:images][0]
     uploaded_file = Rack::Test::UploadedFile.new(img_data['file_data'], 'image/png')
 
-    header 'X-Actor-Id', @account.id
-    post 'api/v1/images', { file: uploaded_file }
+    post 'api/v1/images', { file: uploaded_file }, auth_header(@account)
     _(last_response.status).must_equal 201
 
     result = JSON.parse(last_response.body)
@@ -69,7 +82,6 @@ describe 'Test Image API Integration' do
     # File name might be suffixed or specific, just check that it is not empty
     _(result['data']['attributes']['file_name']).wont_be_nil
 
-    header 'X-Actor-Id', @account.id
     get "api/v1/images/#{id}/raw", nil, @req_header
     _(last_response.status).must_equal 200
     _(last_response.body.length).must_be :>, 1000
@@ -78,13 +90,13 @@ describe 'Test Image API Integration' do
   it 'HAPPY: should suffix duplicate image file names for the same owner' do
     img_data = DATA[:images][0]
 
-    header 'X-Actor-Id', @account.id
-    post 'api/v1/images', { file: Rack::Test::UploadedFile.new(img_data['file_data'], 'image/png') }
+    post 'api/v1/images', { file: Rack::Test::UploadedFile.new(img_data['file_data'], 'image/png') },
+         auth_header(@account)
     _(last_response.status).must_equal 201
     first_result = JSON.parse(last_response.body)
 
-    header 'X-Actor-Id', @account.id
-    post 'api/v1/images', { file: Rack::Test::UploadedFile.new(img_data['file_data'], 'image/png') }
+    post 'api/v1/images', { file: Rack::Test::UploadedFile.new(img_data['file_data'], 'image/png') },
+         auth_header(@account)
     _(last_response.status).must_equal 201
 
     second_result = JSON.parse(last_response.body)
@@ -98,7 +110,6 @@ describe 'Test Image API Integration' do
     img = FaceCloak::UploadImage.call(image_data: seed_attributes(DATA[:images][0]).merge('owner_id' => @account.id))
     storage_key = img.file_data
 
-    header 'X-Actor-Id', img.owner_id
     delete "api/v1/images/#{img.id}", nil, @req_header
     _(last_response.status).must_equal 200
     _(FaceCloak::Image[img.id]).must_be_nil
@@ -108,10 +119,49 @@ describe 'Test Image API Integration' do
   it 'SAD: should NOT delete an image if requester is not owner' do
     img = FaceCloak::UploadImage.call(image_data: seed_attributes(DATA[:images][0]).merge('owner_id' => @account.id))
 
-    header 'X-Actor-Id', 999_999
-    delete "api/v1/images/#{img.id}", nil, @req_header
+    delete "api/v1/images/#{img.id}", nil, auth_request_header(@other_account)
     _(last_response.status).must_equal 403
     _(FaceCloak::Image[img.id]).wont_be_nil
+  end
+
+  it 'SAD: should NOT read raw image if requester is not owner' do
+    img = FaceCloak::UploadImage.call(image_data: seed_attributes(DATA[:images][0]).merge('owner_id' => @account.id))
+
+    get "api/v1/images/#{img.id}/raw", nil, auth_request_header(@other_account)
+
+    _(last_response.status).must_equal 404
+  end
+
+  it 'SAD: should return 404 when image record exists but stored file is missing' do
+    img = FaceCloak::UploadImage.call(image_data: seed_attributes(DATA[:images][0]).merge('owner_id' => @account.id))
+    FaceCloak::ImageStorage.delete(img.file_data)
+
+    get "api/v1/images/#{img.id}/raw", nil, @req_header
+
+    _(last_response.status).must_equal 404
+  end
+
+  it 'SAD: should reject an invalid auth token on protected routes' do
+    get 'api/v1/images', nil, {
+      'CONTENT_TYPE' => 'application/json',
+      'HTTP_AUTHORIZATION' => 'Bearer not-a-real-token'
+    }
+
+    _(last_response.status).must_equal 401
+    _(JSON.parse(last_response.body)['message']).must_equal 'Invalid auth token'
+  end
+
+  it 'SAD: should reject an expired auth token on protected routes' do
+    envelope = JSON.parse(@account.to_json)
+    token = FaceCloak::AuthToken.new(envelope, -1).to_s
+
+    get 'api/v1/images', nil, {
+      'CONTENT_TYPE' => 'application/json',
+      'HTTP_AUTHORIZATION' => "Bearer #{token}"
+    }
+
+    _(last_response.status).must_equal 401
+    _(JSON.parse(last_response.body)['message']).must_equal 'Expired auth token'
   end
 
   it 'SECURITY: should prevent SQL injection in image ID lookup' do

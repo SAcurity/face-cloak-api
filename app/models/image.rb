@@ -6,8 +6,6 @@ require 'sequel'
 module FaceCloak
   # Represents an image that can contain multiple face records.
   class Image < Sequel::Model
-    STORAGE_DIR = ImageStorage::LOCAL_ROOT
-
     unrestrict_primary_key
     one_to_many :face_records
     many_to_many :assignees,
@@ -31,12 +29,27 @@ module FaceCloak
     def to_h
       {
         type: 'image',
-        attributes: {
-          id:,
-          owner_id:,
-          file_name:,
-          face_ids: ordered_face_records.map(&:id)
-        }
+        attributes: image_attributes
+      }
+    end
+
+    def image_attributes
+      {
+        id:,
+        owner_id:,
+        owner: owner_summary,
+        file_name:,
+        face_ids: ordered_face_records.map(&:id),
+        created_at:
+      }
+    end
+
+    def owner_summary
+      return nil unless owner
+
+      {
+        id: owner.id,
+        username: owner.username
       }
     end
 

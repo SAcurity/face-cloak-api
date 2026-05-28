@@ -18,12 +18,31 @@ def wipe_database # rubocop:disable Metrics/AbcSize
   app.DB[:roles].delete
   app.DB[:accounts].delete
   # Clear physical storage
-  FileUtils.rm_rf(Dir.glob("#{FaceCloak::Image::STORAGE_DIR}/*"))
+  FileUtils.rm_rf(Dir.glob("#{FaceCloak::ImageStorage.local_root}/*"))
   FileUtils.rm_rf(Dir.glob("#{FaceCloak::ImageStorage::DOWNLOAD_CACHE_DIR}/*"))
 end
 
 def create_account(username, email, password)
   FaceCloak::CreateAccount.call(account_data: { username:, email:, password: })
+end
+
+def auth_header(account)
+  envelope = JSON.parse(account.to_json)
+  envelope['attributes'] = envelope['attributes'].merge('id' => account.id)
+  token = FaceCloak::AuthToken.new(envelope).to_s
+  { 'HTTP_AUTHORIZATION' => "Bearer #{token}" }
+end
+
+def auth_request_header(account)
+  auth_header(account).merge('CONTENT_TYPE' => 'application/json')
+end
+
+def setup_mailgun_env
+  ENV['MAILGUN_API_KEY'] ||= 'test-mailgun-api-key'
+  ENV['MAILGUN_API_BASE_URL'] ||= 'https://api.mailgun.test'
+  ENV['MAILGUN_DOMAIN'] ||= 'mg.example.test'
+  ENV['MAILGUN_FROM_EMAIL'] ||= 'postmaster@mg.example.test'
+  ENV['MAILGUN_FROM_NAME'] ||= 'FaceCloak'
 end
 
 DATA = {} # rubocop:disable Style/MutableConstant
