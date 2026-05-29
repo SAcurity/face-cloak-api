@@ -6,6 +6,7 @@ require 'logger'
 require 'sequel'
 require './app/lib/secure_db'
 require './app/lib/auth_token'
+require './app/lib/registration_token'
 require './app/lib/gemini_api'
 require './app/lib/image_storage'
 
