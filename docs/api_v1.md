@@ -78,8 +78,16 @@ Retrieves account metadata and permissions.
 - **Success Response (200)**: Includes `policies` (what you can do to them) and `capabilities` (what you can do in general).
 
 ### POST `/accounts/search`
-Finds an account by email (keyed-hash lookup).
-- **Request Body**: `{ "email": "user@example.com" }`
+Finds an account by username or email.
+- **Request Body**:
+  ```json
+  { "username": "alice" }
+  ```
+  OR
+  ```json
+  { "email": "user@example.com" }
+  ```
+- **Note**: Username lookup is direct, while email lookup is performed via keyed-hash (blind index).
 
 ---
 

@@ -21,10 +21,13 @@ module FaceCloak
       routing.on 'search' do
         routing.post do
           search_data = HttpRequest.new(routing).body_data
-          email = search_data[:email]
-          account = Account.first(email_hash: SecureDB.hash(email))
-          raise(Sequel::NoMatchingRow, 'Account not found') unless account
+          account = if search_data[:username]
+                      Account.first(username: search_data[:username])
+                    elsif search_data[:email]
+                      Account.first(email_hash: SecureDB.hash(search_data[:email]))
+                    end
 
+          raise(Sequel::NoMatchingRow, 'Account not found') unless account
           account.to_json
         end
       end

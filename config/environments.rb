@@ -6,6 +6,7 @@ require 'logger'
 require 'sequel'
 require './app/lib/secure_db'
 require './app/lib/auth_token'
+require './app/lib/registration_token'
 require './app/lib/gemini_api'
 require './app/lib/image_storage'
 
@@ -47,9 +48,10 @@ module FaceCloak
     hash_key = required_env.call('HASH_KEY')
     SecureDB.setup(db_key, hash_key)
 
-    # Setup AuthToken
+    # Setup AuthToken and RegistrationToken
     msg_key = required_env.call('MSG_KEY')
     AuthToken.setup(msg_key)
+    RegistrationToken.setup(msg_key)
 
     # Setup GeminiApi
     gemini_key = ENV.delete('GEMINI_API_KEY')
