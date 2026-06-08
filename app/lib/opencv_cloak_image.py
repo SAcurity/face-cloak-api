@@ -75,20 +75,29 @@ def apply_smooth_blur(image, left, top, width, height):
 
 def apply_pixel_art(image, left, top, width, height):
     region = image[top : top + height, left : left + width].copy()
-    small_w = clamp(int(width / 4.0), 18, 34)
-    small_h = max(2, int(height * small_w / width))
+    
+    # Minecraft style: use even larger blocks (1/8th of width)
+    # Ensure at least 8x8 blocks, but not too many to keep it "blocky"
+    block_size = max(8, width // 10)
+    small_w = max(4, width // block_size)
+    small_h = max(4, height // block_size)
+    
     small = cv2.resize(region, (small_w, small_h), interpolation=cv2.INTER_NEAREST)
-    pixel_art = posterize_for_pixel_art(small)
+    
+    # Apply flat color stepping (posterization)
+    pixel_art = posterize_for_minecraft(small)
+    
+    # Upscale back to original size with sharp edges
     pixel_art = cv2.resize(pixel_art, (width, height), interpolation=cv2.INTER_NEAREST)
-    blend_ellipse(image, pixel_art, left, top, feather=False)
+    
+    # For Minecraft style, a rectangular blend feels more "game-like" than an ellipse
+    image[top : top + height, left : left + width] = pixel_art
 
 
-def posterize_for_pixel_art(image):
-    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV).astype(np.float32)
-    hsv[:, :, 1] = np.clip(hsv[:, :, 1] * 1.12, 0, 255)
-    hsv[:, :, 2] = np.clip((hsv[:, :, 2] * 1.04) + 6, 0, 255)
-    saturated = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
-    return ((saturated.astype(np.uint16) // 24) * 24 + 12).clip(0, 255).astype(np.uint8)
+def posterize_for_minecraft(image):
+    # Reduce color palette to 4 levels per channel for a flat, retro look
+    # (image // 64) * 64 + 32 creates 4 distinct flat color steps (0, 64, 128, 192)
+    return ((image.astype(np.uint16) // 64) * 64 + 32).clip(0, 255).astype(np.uint8)
 
 
 def apply_comic(image, left, top, width, height):
