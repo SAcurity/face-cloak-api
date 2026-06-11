@@ -63,6 +63,8 @@ module FaceCloak
           username:,
           email:,
           avatar:,
+          has_password: !password_digest.to_s.empty?,
+          sso_provider:,
           created_at:,
           updated_at:
         },
