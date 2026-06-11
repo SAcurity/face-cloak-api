@@ -7,6 +7,7 @@ require 'sequel'
 require './app/lib/secure_db'
 require './app/lib/auth_token'
 require './app/lib/registration_token'
+require './app/lib/signed_request'
 require './app/lib/gemini_api'
 require './app/lib/image_storage'
 
@@ -52,6 +53,7 @@ module FaceCloak
     msg_key = required_env.call('MSG_KEY')
     AuthToken.setup(msg_key)
     RegistrationToken.setup(msg_key)
+    SignedRequest.setup(required_env.call('VERIFY_KEY'), ENV.delete('SIGNING_KEY'))
 
     # Setup GeminiApi
     gemini_key = ENV.delete('GEMINI_API_KEY')
@@ -82,7 +84,6 @@ module FaceCloak
 
     configure :production do
       plugin :redirect_http_to_https
-      plugin :hsts
     end
   end
 end

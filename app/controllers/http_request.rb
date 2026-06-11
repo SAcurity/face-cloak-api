@@ -20,6 +20,10 @@ module FaceCloak
       raw.empty? ? {} : JSON.parse(raw, symbolize_names: true)
     end
 
+    def signed_body_data
+      SignedRequest.parse(body_data)
+    end
+
     def authorized_account
       header = @routing.headers['AUTHORIZATION']
       return nil unless header

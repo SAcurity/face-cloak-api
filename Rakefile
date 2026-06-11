@@ -211,4 +211,13 @@ namespace :newkey do
     require './app/lib/auth_token'
     puts "MSG_KEY: #{FaceCloak::AuthToken.generate_key}"
   end
+
+  desc 'Create sample sign/verify keypair for signed communication'
+  task :signing do
+    require './app/lib/signed_request'
+    keypair = FaceCloak::SignedRequest.generate_keypair
+
+    puts "SIGNING_KEY: #{keypair[:signing_key]}"
+    puts " VERIFY_KEY: #{keypair[:verify_key]}"
+  end
 end

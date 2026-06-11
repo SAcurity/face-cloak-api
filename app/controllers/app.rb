@@ -50,6 +50,7 @@ module FaceCloak
     route do |routing|
       routing.redirect_http_to_https if Api.environment == :production
       response['Content-Type'] = 'application/json'
+      apply_security_headers
 
       # Enforce TLS/SSL Required
       HttpRequest.new(routing).secure? ||

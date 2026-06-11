@@ -29,7 +29,7 @@ describe 'Test Authentication' do
   def google_claims(overrides = {})
     now = Time.now.to_i
     {
-      aud: 'test-google-client-id', iss: 'https://accounts.google.com',
+      aud: FaceCloak::Api.config.GOOGLE_CLIENT_ID, iss: 'https://accounts.google.com',
       sub: 'google-sub-123', email: 'sso@example.com',
       email_verified: true, name: 'SSO User',
       picture: 'https://example.com/avatar.png',
@@ -39,7 +39,7 @@ describe 'Test Authentication' do
 
   it 'HAPPY: should authenticate valid credentials' do
     creds = { username: @account_data[:username], password: @account_data[:password] }
-    post 'api/v1/auth/authenticate', creds.to_json, @req_header
+    post 'api/v1/auth/authenticate', signed_json(creds), @req_header
     _(last_response.status).must_equal 200
 
     result = JSON.parse last_response.body
@@ -57,7 +57,7 @@ describe 'Test Authentication' do
 
   it 'SECURITY: returned auth_token decrypts to the authenticated account' do
     creds = { username: @account_data[:username], password: @account_data[:password] }
-    post 'api/v1/auth/authenticate', creds.to_json, @req_header
+    post 'api/v1/auth/authenticate', signed_json(creds), @req_header
 
     token = JSON.parse(last_response.body)['attributes']['auth_token']
     payload = FaceCloak::AuthToken.load(token).payload
@@ -68,7 +68,7 @@ describe 'Test Authentication' do
 
   it 'BAD: should reject invalid password' do
     creds = { username: @account_data[:username], password: 'wrong_password' }
-    post 'api/v1/auth/authenticate', creds.to_json, @req_header
+    post 'api/v1/auth/authenticate', signed_json(creds), @req_header
     _(last_response.status).must_equal 403
 
     result = JSON.parse last_response.body
@@ -78,8 +78,17 @@ describe 'Test Authentication' do
 
   it 'BAD: should reject unknown username' do
     creds = { username: 'nonexistent', password: 'password123' }
-    post 'api/v1/auth/authenticate', creds.to_json, @req_header
+    post 'api/v1/auth/authenticate', signed_json(creds), @req_header
     _(last_response.status).must_equal 403
+  end
+
+  it 'SECURITY: should reject unsigned authentication requests' do
+    creds = { username: @account_data[:username], password: @account_data[:password] }
+
+    post 'api/v1/auth/authenticate', creds.to_json, @req_header
+
+    _(last_response.status).must_equal 403
+    _(JSON.parse(last_response.body)['message']).must_equal 'Must sign request'
   end
 
   describe 'Registration verification' do
@@ -98,7 +107,7 @@ describe 'Test Authentication' do
     it 'HAPPY: returns 202 and triggers a Mailgun POST' do
       stub = stub_request(:post, @mail_url).to_return(status: 200)
 
-      post 'api/v1/auth/register', @registration.to_json, @req_header
+      post 'api/v1/auth/register', signed_json(@registration), @req_header
 
       _(last_response.status).must_equal 202
       assert_requested(stub)
@@ -108,7 +117,7 @@ describe 'Test Authentication' do
       stub_request(:post, @mail_url).to_return(status: 200)
       registration = @registration.merge(email: @account_data[:email])
 
-      post 'api/v1/auth/register', registration.to_json, @req_header
+      post 'api/v1/auth/register', signed_json(registration), @req_header
 
       _(last_response.status).must_equal 400
       _(JSON.parse(last_response.body)['message']).must_equal 'Email already registered'
@@ -117,17 +126,23 @@ describe 'Test Authentication' do
     it 'SAD: returns 500 when Mailgun rejects the email request' do
       stub_request(:post, @mail_url).to_return(status: 503)
 
-      post 'api/v1/auth/register', @registration.to_json, @req_header
+      post 'api/v1/auth/register', signed_json(@registration), @req_header
 
       _(last_response.status).must_equal 500
       _(JSON.parse(last_response.body)['message']).must_equal 'Could not send verification email'
+    end
+
+    it 'SECURITY: rejects unsigned registration requests' do
+      post 'api/v1/auth/register', @registration.to_json, @req_header
+
+      _(last_response.status).must_equal 403
     end
   end
 
   describe 'SSO authentication' do
     it 'HAPPY: creates a new SSO account and returns an auth token' do
       post 'api/v1/auth/sso',
-           { provider: 'google', id_token: google_id_token, jwks: }.to_json,
+           signed_json({ provider: 'google', id_token: google_id_token, jwks: }),
            @req_header
 
       _(last_response.status).must_equal 200
@@ -146,7 +161,7 @@ describe 'Test Authentication' do
     end
 
     it 'HAPPY: repeated SSO login reuses the existing account' do
-      body = { provider: 'google', id_token: google_id_token, jwks: }.to_json
+      body = signed_json({ provider: 'google', id_token: google_id_token, jwks: })
 
       post 'api/v1/auth/sso', body, @req_header
       first_id = JSON.parse(last_response.body)['attributes']['account']['attributes']['id']
@@ -162,7 +177,7 @@ describe 'Test Authentication' do
       existing = create_account('local_user', 'sso@example.com', 'password123')
 
       post 'api/v1/auth/sso',
-           { provider: 'google', id_token: google_id_token, jwks: }.to_json,
+           signed_json({ provider: 'google', id_token: google_id_token, jwks: }),
            @req_header
 
       _(last_response.status).must_equal 200
@@ -175,7 +190,7 @@ describe 'Test Authentication' do
 
     it 'SECURITY: rejects an id_token with the wrong audience' do
       post 'api/v1/auth/sso',
-           { provider: 'google', id_token: google_id_token(aud: 'wrong-client'), jwks: }.to_json,
+           signed_json({ provider: 'google', id_token: google_id_token(aud: 'wrong-client'), jwks: }),
            @req_header
 
       _(last_response.status).must_equal 401
@@ -183,7 +198,7 @@ describe 'Test Authentication' do
 
     it 'SECURITY: rejects an id_token with the wrong issuer' do
       post 'api/v1/auth/sso',
-           { provider: 'google', id_token: google_id_token(iss: 'https://evil.example'), jwks: }.to_json,
+           signed_json({ provider: 'google', id_token: google_id_token(iss: 'https://evil.example'), jwks: }),
            @req_header
 
       _(last_response.status).must_equal 401
@@ -191,7 +206,7 @@ describe 'Test Authentication' do
 
     it 'SECURITY: rejects an id_token with no matching JWKS kid' do
       post 'api/v1/auth/sso',
-           { provider: 'google', id_token: google_id_token, jwks: { keys: [] } }.to_json,
+           signed_json({ provider: 'google', id_token: google_id_token, jwks: { keys: [] } }),
            @req_header
 
       _(last_response.status).must_equal 401
@@ -202,7 +217,7 @@ describe 'Test Authentication' do
       forged = JWT.encode(google_claims, other_key, 'RS256', kid: 'test-kid')
 
       post 'api/v1/auth/sso',
-           { provider: 'google', id_token: forged, jwks: }.to_json,
+           signed_json({ provider: 'google', id_token: forged, jwks: }),
            @req_header
 
       _(last_response.status).must_equal 401
@@ -210,7 +225,7 @@ describe 'Test Authentication' do
 
     it 'SECURITY: rejects an unverified email' do
       post 'api/v1/auth/sso',
-           { provider: 'google', id_token: google_id_token(email_verified: false), jwks: }.to_json,
+           signed_json({ provider: 'google', id_token: google_id_token(email_verified: false), jwks: }),
            @req_header
 
       _(last_response.status).must_equal 401
@@ -218,10 +233,18 @@ describe 'Test Authentication' do
 
     it 'BAD: rejects unsupported providers' do
       post 'api/v1/auth/sso',
-           { provider: 'github', id_token: google_id_token, jwks: }.to_json,
+           signed_json({ provider: 'github', id_token: google_id_token, jwks: }),
            @req_header
 
       _(last_response.status).must_equal 400
+    end
+
+    it 'SECURITY: rejects unsigned SSO requests' do
+      post 'api/v1/auth/sso',
+           { provider: 'google', id_token: google_id_token, jwks: }.to_json,
+           @req_header
+
+      _(last_response.status).must_equal 403
     end
   end
 end

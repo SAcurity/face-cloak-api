@@ -13,7 +13,7 @@ describe 'Test Account API Integration' do
   it 'HAPPY: should be able to create a new account' do
     account_data = { username: 'alice', email: 'alice@example.com', password: 'password123' }
 
-    post 'api/v1/accounts', account_data.to_json, @req_header
+    post 'api/v1/accounts', signed_json(account_data), @req_header
     _(last_response.status).must_equal 201
 
     result = JSON.parse(last_response.body)
@@ -47,7 +47,7 @@ describe 'Test Account API Integration' do
     create_account('alice', 'alice@example.com', 'password123')
     account_data = { username: 'alice', email: 'alice2@example.com', password: 'password123' }
 
-    post 'api/v1/accounts', account_data.to_json, @req_header
+    post 'api/v1/accounts', signed_json(account_data), @req_header
     _(last_response.status).must_equal 400
     _(JSON.parse(last_response.body)['message']).must_include 'already exists'
   end
@@ -56,7 +56,7 @@ describe 'Test Account API Integration' do
     create_account('alice', 'alice@example.com', 'password123')
     account_data = { username: 'alice2', email: 'alice@example.com', password: 'password123' }
 
-    post 'api/v1/accounts', account_data.to_json, @req_header
+    post 'api/v1/accounts', signed_json(account_data), @req_header
     _(last_response.status).must_equal 400
     _(JSON.parse(last_response.body)['message']).must_include 'already exists'
   end
@@ -92,7 +92,7 @@ describe 'Test Account API Integration' do
     create_account('alice', 'alice@example.com', 'password123')
     search_data = { email: 'alice@example.com' }
 
-    post 'api/v1/accounts/search', search_data.to_json, @req_header
+    post 'api/v1/accounts/search', signed_json(search_data), @req_header
     _(last_response.status).must_equal 200
 
     result = JSON.parse(last_response.body)
@@ -101,8 +101,25 @@ describe 'Test Account API Integration' do
   end
 
   it 'SAD: should return 404 for search with unknown email' do
-    post 'api/v1/accounts/search', { email: 'unknown@example.com' }.to_json, @req_header
+    post 'api/v1/accounts/search', signed_json({ email: 'unknown@example.com' }), @req_header
     _(last_response.status).must_equal 404
+  end
+
+  it 'SECURITY: should reject unsigned account creation requests' do
+    account_data = { username: 'alice', email: 'alice@example.com', password: 'password123' }
+
+    post 'api/v1/accounts', account_data.to_json, @req_header
+
+    _(last_response.status).must_equal 403
+    _(JSON.parse(last_response.body)['message']).must_equal 'Must sign request'
+  end
+
+  it 'SECURITY: should reject unsigned account search requests' do
+    create_account('alice', 'alice@example.com', 'password123')
+
+    post 'api/v1/accounts/search', { email: 'alice@example.com' }.to_json, @req_header
+
+    _(last_response.status).must_equal 403
   end
 
   it 'SAD: should return 404 for non-existent account' do
