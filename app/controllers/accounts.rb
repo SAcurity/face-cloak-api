@@ -86,6 +86,8 @@ module FaceCloak
               id: account.id,
               username: account.username,
               email: account.email,
+              has_password: !account.password_digest.to_s.empty?,
+              sso_provider: account.sso_provider,
               created_at: account.created_at,
               updated_at: account.updated_at,
               policies: policy.index_summary
