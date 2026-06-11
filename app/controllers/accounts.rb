@@ -20,7 +20,7 @@ module FaceCloak
 
       routing.on 'search' do
         routing.post do
-          search_data = HttpRequest.new(routing).body_data
+          search_data = HttpRequest.new(routing).signed_body_data
           account = if search_data[:username]
                       Account.first(username: search_data[:username])
                     elsif search_data[:email]
@@ -30,6 +30,8 @@ module FaceCloak
           raise(Sequel::NoMatchingRow, 'Account not found') unless account
 
           account.to_json
+        rescue SignedRequest::VerificationError
+          routing.halt 403, { message: 'Must sign request' }.to_json
         end
       end
 
@@ -101,11 +103,13 @@ module FaceCloak
         end
 
         routing.post do
-          account_data = HttpRequest.new(routing).body_data
+          account_data = HttpRequest.new(routing).signed_body_data
           new_account = CreateAccount.call(account_data:)
           response.status = 201
           response['Location'] = "#{@account_route}/#{new_account.username}"
           { message: 'Account created', data: new_account.to_h }.to_json
+        rescue SignedRequest::VerificationError
+          routing.halt 403, { message: 'Must sign request' }.to_json
         rescue StandardError => e
           Api.logger.warn "ACCOUNT CREATION ERROR: #{e.message}"
           routing.halt 400, { message: e.message }.to_json

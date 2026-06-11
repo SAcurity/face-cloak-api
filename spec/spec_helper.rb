@@ -47,6 +47,10 @@ def auth_request_header(account)
   auth_header(account).merge('CONTENT_TYPE' => 'application/json')
 end
 
+def signed_json(data)
+  FaceCloak::SignedRequest.sign(data).to_json
+end
+
 def setup_mailgun_env
   ENV['MAILGUN_API_KEY'] ||= 'test-mailgun-api-key'
   ENV['MAILGUN_API_BASE_URL'] ||= 'https://api.mailgun.test'

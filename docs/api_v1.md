@@ -10,6 +10,30 @@ Detailed technical documentation for FaceCloak API routes.
 ### Required Headers
 - **Protected Routes**: `Authorization: Bearer <auth_token>`
 - **JSON Requests**: `Content-Type: application/json`
+- **Signed Public POST Requests**: Public POST routes that do not carry a Bearer token must send a signed body.
+
+### Signed Public Requests
+The following public POST routes require a client signature:
+
+- `POST /auth/authenticate`
+- `POST /auth/register`
+- `POST /auth/sso`
+- `POST /accounts`
+- `POST /accounts/search`
+
+Signed request format:
+
+```json
+{
+  "data": {
+    "username": "alice",
+    "password": "password123"
+  },
+  "signature": "base64-ed25519-signature"
+}
+```
+
+The signature is calculated over `data.to_json` with the client signing key. The API stores only `VERIFY_KEY` in production; `SIGNING_KEY` is for the Web App client and local tests/dev only. Authenticated mutation routes remain protected by Bearer token, auth scope, and resource policies. Multipart image upload is not wrapped in signed JSON.
 
 ### Auth Scopes
 Auth tokens carry an encrypted authorization scope. Password login and SSO login issue full session tokens (`*:write`). Account detail responses include a reduced read-only API key (`*:read`) that can read protected resources but cannot upload, delete, assign, respond, decline, or otherwise mutate state.
@@ -29,7 +53,7 @@ Auth tokens carry an encrypted authorization scope. Password login and SSO login
 
 ### POST `/auth/authenticate`
 Authenticates a user and issues a full-scope auth token.
-- **Request Body**:
+- **Request Body**: Signed public request whose `data` is:
   ```json
   {
     "username": "alice",
@@ -49,7 +73,7 @@ Authenticates a user and issues a full-scope auth token.
 
 ### POST `/auth/sso`
 Authenticates a Google SSO user after the Web App completes the OAuth/OIDC browser flow.
-- **Request Body**:
+- **Request Body**: Signed public request whose `data` is:
   ```json
   {
     "provider": "google",
@@ -59,11 +83,11 @@ Authenticates a Google SSO user after the Web App completes the OAuth/OIDC brows
   ```
 - **Success Response (200)**: Same envelope as password authentication.
 - **Validation**: The API verifies the JWT signature, `aud`, `iss`, expiration, subject, email, and `email_verified`.
-- **Note**: The API uses `jwt` and `http` only; it does not use Google's packaged SSO gems.
+- **Note**: The API uses `jwt` and `http` only; it does not use Google's packaged SSO gems. The Web App owns the Google OAuth `state` nonce: it must create, store, and verify `state` before sending the signed SSO payload to the API.
 
 ### POST `/auth/register`
 Validates email and sends a registration verification link.
-- **Request Body**:
+- **Request Body**: Signed public request whose `data` is:
   ```json
   {
     "email": "user@example.com",
@@ -98,7 +122,7 @@ Lists all accounts (Admins see all, Users see themselves).
 
 ### POST `/accounts`
 Creates a new account (Public route).
-- **Request Body**: `{ "username": "...", "email": "...", "password": "..." }`
+- **Request Body**: Signed public request whose `data` is `{ "username": "...", "email": "...", "password": "..." }`
 
 ### GET `/accounts/:username`
 Retrieves account metadata and permissions, and returns a read-only API key for that account.
@@ -135,7 +159,7 @@ Deletes an account.
 
 ### POST `/accounts/search`
 Finds an account by username or email.
-- **Request Body**:
+- **Request Body**: Signed public request whose `data` is:
   ```json
   { "username": "alice" }
   ```
@@ -211,3 +235,20 @@ Audit logs for all faces in an image (Owner only).
 ### GET `/face_records/:id/logs`
 Audit logs for a specific face (Owner or Assignee).
 - **Response Data**: Each log includes the action snapshot captured when the log was written: `assigned_user_id`, `assigned_user`, and `cloak_type`.
+
+---
+
+## 6. Browser Security
+
+### Security Headers
+All API responses send conservative browser security headers, including `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, and a restrictive Content Security Policy.
+
+### POST `/security/csp-report`
+Receives browser CSP violation reports.
+
+- **Auth**: None.
+- **Signed Request**: Not required. Browser-generated CSP reports cannot attach the client request signature.
+- **Success Response**: `204 No Content`.
+
+### Asset Integrity
+`face-cloak-api` does not serve third-party browser scripts, stylesheets, or fonts. The Web App must attach SRI hashes to third-party browser assets.

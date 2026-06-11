@@ -7,11 +7,18 @@ module FaceCloak
   # Web controller for FaceCloak API
   class Api < Roda
     route('auth') do |routing|
+      response['Cache-Control'] = 'no-store'
+
+      begin
+        @request_data = HttpRequest.new(routing).signed_body_data
+      rescue SignedRequest::VerificationError
+        routing.halt 403, { message: 'Must sign request' }.to_json
+      end
+
       routing.is 'authenticate' do
         # POST api/v1/auth/authenticate
         routing.post do
-          credentials = HttpRequest.new(routing).body_data
-          account = AuthenticateAccount.call(credentials)
+          account = AuthenticateAccount.call(@request_data)
           account.to_json
         rescue AuthenticateAccount::UnauthorizedError => e
           Api.logger.warn "AUTHENTICATION ERROR: #{e.message}"
@@ -22,8 +29,7 @@ module FaceCloak
       routing.is 'register' do
         # POST api/v1/auth/register
         routing.post do
-          registration = HttpRequest.new(routing).body_data
-          VerifyRegistration.new(registration).call
+          VerifyRegistration.new(@request_data).call
           response.status = 202
           { message: 'Verification email sent' }.to_json
         rescue VerifyRegistration::InvalidRegistration => e
@@ -37,8 +43,7 @@ module FaceCloak
       routing.is 'sso' do
         # POST api/v1/auth/sso
         routing.post do
-          sso_data = HttpRequest.new(routing).body_data
-          AuthenticateSsoAccount.call(sso_data).to_json
+          AuthenticateSsoAccount.call(@request_data).to_json
         rescue AuthenticateSsoAccount::UnsupportedProviderError, AuthenticateSsoAccount::BadRequestError => e
           routing.halt 400, { message: e.message }.to_json
         rescue AuthenticateSsoAccount::UnauthorizedError => e
