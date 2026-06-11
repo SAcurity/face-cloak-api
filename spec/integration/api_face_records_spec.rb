@@ -124,6 +124,18 @@ describe 'Test FaceRecord API Integration' do
     _(last_response.status).must_equal 200
   end
 
+  it 'SAD: should NOT unassign a face record after assignee responded' do
+    face = FaceCloak::CreateFaceRecord.call(face_data: { image_id: @img.id }, actor_id: @owner.id)
+    FaceCloak::AssignFaceRecord.call(face_record_id: face.id, assigned_user_id: @assignee.id, actor_id: @owner.id)
+    FaceCloak::RespondToFaceRecord.call(face_record_id: face.id, cloak_type: 'mask', actor_id: @assignee.id)
+
+    delete "api/v1/face_records/#{face.id}/assignment", nil, @req_header
+
+    _(last_response.status).must_equal 409
+    face.refresh
+    _(face.assigned_user_id).must_equal @assignee.id
+  end
+
   it 'SAD: should NOT be able to unassign a face record if not owner' do
     face = FaceCloak::CreateFaceRecord.call(face_data: { image_id: @img.id }, actor_id: @owner.id)
     FaceCloak::AssignFaceRecord.call(face_record_id: face.id, assigned_user_id: @assignee.id, actor_id: @owner.id)

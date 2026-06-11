@@ -3,9 +3,10 @@
 require 'json'
 
 require_relative 'securable'
+require_relative 'auth_scope'
 
 module FaceCloak
-  # Time-limited encrypted token carrying an account authorization payload.
+  # Time-limited encrypted token carrying an account authorization payload and scope.
   class AuthToken
     extend Securable
 
@@ -37,20 +38,39 @@ module FaceCloak
       instance = allocate
       instance.instance_variable_set(:@token, token)
       instance.instance_variable_set(:@payload, contents['payload'])
+      instance.instance_variable_set(:@scope, scope_from(contents))
       instance.instance_variable_set(:@expiration, contents['exp'])
       instance
     end
 
-    def initialize(payload, expiration = ONE_WEEK)
+    def self.scope_from(contents)
+      scope = contents['scope']
+      raise InvalidTokenError if scope.to_s.empty?
+
+      AuthScope.new(scope)
+    rescue AuthScope::InvalidScopeError
+      raise InvalidTokenError
+    end
+
+    def initialize(payload, expiration = ONE_WEEK, scope: AuthScope.new)
       @payload = payload
+      @scope = scope.is_a?(AuthScope) ? scope : AuthScope.new(scope)
       @expiration = (Time.now + expiration).to_i
-      @token = self.class.tokenize('payload' => @payload, 'exp' => @expiration)
+      @token = self.class.tokenize(
+        'payload' => @payload, 'scope' => @scope.to_s, 'exp' => @expiration
+      )
     end
 
     def payload
       raise ExpiredTokenError if expired?
 
       @payload
+    end
+
+    def scope
+      raise ExpiredTokenError if expired?
+
+      @scope
     end
 
     def expired?

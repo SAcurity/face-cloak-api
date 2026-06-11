@@ -26,10 +26,20 @@ def create_account(username, email, password)
   FaceCloak::CreateAccount.call(account_data: { username:, email:, password: })
 end
 
+def grant_admin(account)
+  role = FaceCloak::Role.first(name: 'admin') || FaceCloak::Role.create(name: 'admin')
+  account.add_system_role(role) unless account.system_roles_dataset.where(id: role.id).any?
+  account
+end
+
 def auth_header(account)
+  auth_header_with_scope(account, FaceCloak::AuthScope::FULL)
+end
+
+def auth_header_with_scope(account, scope)
   envelope = JSON.parse(account.to_json)
   envelope['attributes'] = envelope['attributes'].merge('id' => account.id)
-  token = FaceCloak::AuthToken.new(envelope).to_s
+  token = FaceCloak::AuthToken.new(envelope, scope: FaceCloak::AuthScope.new(scope)).to_s
   { 'HTTP_AUTHORIZATION' => "Bearer #{token}" }
 end
 

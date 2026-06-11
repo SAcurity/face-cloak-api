@@ -39,7 +39,7 @@ module FaceCloak
         face_record.image.add_assignee(assignee) unless face_record.image.assignees.include?(assignee)
 
         # Log action
-        face_record.add_action_log(action: 'assign', actor_id:)
+        face_record.add_audit_log(action: 'assign', actor_id:)
       end
     end
   end

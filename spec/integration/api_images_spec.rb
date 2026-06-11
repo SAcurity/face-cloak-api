@@ -87,6 +87,16 @@ describe 'Test Image API Integration' do
     _(last_response.body.length).must_be :>, 1000
   end
 
+  it 'SECURITY: should reject image upload with a read-only token' do
+    img_data = DATA[:images][0]
+    uploaded_file = Rack::Test::UploadedFile.new(img_data['file_data'], 'image/png')
+
+    post 'api/v1/images', { file: uploaded_file },
+         auth_header_with_scope(@account, FaceCloak::AuthScope::READ_ONLY)
+
+    _(last_response.status).must_equal 403
+  end
+
   it 'HAPPY: should suffix duplicate image file names for the same owner' do
     img_data = DATA[:images][0]
 
@@ -114,6 +124,16 @@ describe 'Test Image API Integration' do
     _(last_response.status).must_equal 200
     _(FaceCloak::Image[img.id]).must_be_nil
     _(FaceCloak::ImageStorage.exist?(storage_key)).must_equal false
+  end
+
+  it 'SECURITY: should reject image delete with a read-only token' do
+    img = FaceCloak::UploadImage.call(image_data: seed_attributes(DATA[:images][0]).merge('owner_id' => @account.id))
+
+    delete "api/v1/images/#{img.id}", nil,
+           auth_header_with_scope(@account, FaceCloak::AuthScope::READ_ONLY).merge('CONTENT_TYPE' => 'application/json')
+
+    _(last_response.status).must_equal 403
+    _(FaceCloak::Image[img.id]).wont_be_nil
   end
 
   it 'SAD: should NOT delete an image if requester is not owner' do

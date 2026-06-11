@@ -33,6 +33,18 @@ module FaceCloak
           routing.halt 500, { message: 'Could not send verification email' }.to_json
         end
       end
+
+      routing.is 'sso' do
+        # POST api/v1/auth/sso
+        routing.post do
+          sso_data = HttpRequest.new(routing).body_data
+          AuthenticateSsoAccount.call(sso_data).to_json
+        rescue AuthenticateSsoAccount::UnsupportedProviderError, AuthenticateSsoAccount::BadRequestError => e
+          routing.halt 400, { message: e.message }.to_json
+        rescue AuthenticateSsoAccount::UnauthorizedError => e
+          routing.halt 401, { message: e.message }.to_json
+        end
+      end
     end
   end
 end

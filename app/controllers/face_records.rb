@@ -17,7 +17,7 @@ module FaceCloak
             viewer = Account.first(id: requester_id)
             face_record = FaceRecord[id] || raise(Sequel::NoMatchingRow, 'Face record not found')
 
-            policy = FaceRecordPolicy.new(viewer, face_record)
+            policy = FaceRecordPolicy.new(viewer, face_record, auth_scope: current_auth_scope)
             routing.halt 403, { message: 'Forbidden' }.to_json unless policy.can_assign?
 
             new_data = HttpRequest.new(routing).body_data
@@ -43,11 +43,14 @@ module FaceCloak
             viewer = Account.first(id: requester_id)
             face_record = FaceRecord[id] || raise(Sequel::NoMatchingRow, 'Face record not found')
 
-            policy = FaceRecordPolicy.new(viewer, face_record)
+            policy = FaceRecordPolicy.new(viewer, face_record, auth_scope: current_auth_scope)
             routing.halt 403, { message: 'Forbidden' }.to_json unless policy.can_assign?
+            if face_record.responded_at
+              routing.halt 409, { message: 'Cannot unassign a face record after response' }.to_json
+            end
 
             face_record.update(assigned_user_id: nil, assigned_at: nil)
-            face_record.add_action_log(action: 'unassign', actor_id: requester_id.to_i)
+            face_record.add_audit_log(action: 'unassign', actor_id: requester_id.to_i)
 
             { message: 'User unassigned from face record' }.to_json
           end
@@ -60,7 +63,7 @@ module FaceCloak
             viewer = Account.first(id: requester_id)
             face_record = FaceRecord[id] || raise(Sequel::NoMatchingRow, 'Face record not found')
 
-            policy = FaceRecordPolicy.new(viewer, face_record)
+            policy = FaceRecordPolicy.new(viewer, face_record, auth_scope: current_auth_scope)
             routing.halt 403, { message: 'Forbidden' }.to_json unless policy.can_respond?
 
             new_data = HttpRequest.new(routing).body_data
@@ -82,7 +85,7 @@ module FaceCloak
             viewer = Account.first(id: requester_id)
             face_record = FaceRecord[id] || raise(Sequel::NoMatchingRow, 'Face record not found')
 
-            policy = FaceRecordPolicy.new(viewer, face_record)
+            policy = FaceRecordPolicy.new(viewer, face_record, auth_scope: current_auth_scope)
             routing.halt 403, { message: 'Forbidden' }.to_json unless policy.can_decline?
 
             face_record = DeclineFaceRecord.call(
@@ -100,7 +103,7 @@ module FaceCloak
             viewer = Account.first(id: requester_id)
             face_record = FaceRecord[id] || raise(Sequel::NoMatchingRow, 'Face record not found')
 
-            policy = FaceRecordPolicy.new(viewer, face_record)
+            policy = FaceRecordPolicy.new(viewer, face_record, auth_scope: current_auth_scope)
             routing.halt 404, { message: 'Face record not found' }.to_json unless policy.can_view_logs?
 
             output = { data: face_record.action_logs.map(&:to_h) }
@@ -114,7 +117,7 @@ module FaceCloak
           viewer = Account.first(id: requester_id)
           face_record = FaceRecord[id] || raise(Sequel::NoMatchingRow, 'Face record not found')
 
-          policy = FaceRecordPolicy.new(viewer, face_record)
+          policy = FaceRecordPolicy.new(viewer, face_record, auth_scope: current_auth_scope)
           routing.halt 404, { message: 'Face record not found' }.to_json unless policy.can_view?
 
           output = face_record.to_h

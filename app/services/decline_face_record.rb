@@ -11,7 +11,7 @@ module FaceCloak
 
       face_record.db.transaction do
         face_record.update(declined_attributes)
-        face_record.add_action_log(action: 'decline', actor_id: actor_id.to_i)
+        face_record.add_audit_log(action: 'decline', actor_id: actor_id.to_i)
       end
 
       clear_cached_image(face_record.image_id)

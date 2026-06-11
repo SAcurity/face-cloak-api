@@ -21,7 +21,7 @@ module FaceCloak
 
       # Wait a tiny bit for DB to settle during high-load tests
       sleep 0.1
-      face_record.add_action_log(action: 'respond', actor_id:)
+      face_record.add_audit_log(action: 'respond', actor_id:)
 
       face_record
     end
