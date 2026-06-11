@@ -56,7 +56,8 @@ module FaceCloak
         routing.halt(403, { message: 'TLS/SSL Required' }.to_json)
 
       begin
-        @auth_account = HttpRequest.new(routing).authenticated_account
+        @auth = HttpRequest.new(routing).authorized_account
+        @auth_account = @auth&.account
       rescue AuthToken::InvalidTokenError
         routing.halt 401, { message: 'Invalid auth token' }.to_json
       rescue AuthToken::ExpiredTokenError
@@ -83,6 +84,10 @@ module FaceCloak
 
     def current_account_id
       @auth_account&.dig('attributes', 'id')
+    end
+
+    def current_auth_scope
+      @auth&.scope || AuthScope.new
     end
 
     def require_authenticated_account(routing)

@@ -8,7 +8,7 @@ module FaceCloak
       new_face = FaceRecord.create(face_data)
 
       # 2. Log creation
-      new_face.add_action_log(action: 'create', actor_id: actor_id)
+      new_face.add_audit_log(action: 'create', actor_id: actor_id)
 
       new_face
     rescue Sequel::MassAssignmentRestriction

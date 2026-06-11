@@ -25,7 +25,7 @@ module FaceCloak
     plugin :association_dependencies, assigned_images: :nullify
 
     plugin :whitelist_security
-    set_allowed_columns :username, :email, :password
+    set_allowed_columns :username, :email, :password, :avatar, :sso_provider, :sso_subject
 
     plugin :timestamps, update_on_create: true
 
@@ -44,6 +44,8 @@ module FaceCloak
     end
 
     def password?(try_password)
+      return false if password_digest.to_s.empty?
+
       digest = Password.from_digest(password_digest)
       digest.correct?(try_password)
     end
@@ -59,17 +61,29 @@ module FaceCloak
         attributes: {
           id:,
           username:,
-          email:
+          email:,
+          avatar:,
+          created_at:,
+          updated_at:
         },
         include: {
           system_roles: system_roles.map(&:name),
-          face_assignments: face_assignments.map do |e|
-            { face_id: e.id, image_id: e.image_id, image_name: e.image.file_name, cloak_type: e.cloak_type }
-          end
+          face_assignments: face_assignments.map { |face_record| face_assignment_summary(face_record) }
         }
       }
     end
     # rubocop:enable Metrics/MethodLength
+
+    def face_assignment_summary(face_record)
+      {
+        face_id: face_record.id,
+        image_id: face_record.image_id,
+        image_name: face_record.image.file_name,
+        owner_username: face_record.image.owner.username,
+        cloak_type: face_record.cloak_type,
+        responded_at: face_record.responded_at
+      }
+    end
 
     def to_json(options = {})
       JSON(to_h, options)

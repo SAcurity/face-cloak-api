@@ -32,6 +32,8 @@ describe 'Test Account API Integration' do
     result = JSON.parse(last_response.body)
     _(result['data'].map { |a| a['username'] }).must_include 'alice'
     _(result['data'].first).must_include 'policies'
+    _(result['data'].first).must_include 'email'
+    _(result['data'].first).must_include 'created_at'
   end
 
   it 'SAD: should require authentication to get list of all accounts' do
@@ -66,10 +68,24 @@ describe 'Test Account API Integration' do
     _(last_response.status).must_equal 200
 
     result = JSON.parse(last_response.body)
-    _(result['type']).must_equal 'account'
-    _(result['attributes']['username']).must_equal 'alice'
-    _(result['attributes']['email']).must_equal 'alice@example.com'
-    _(result).must_include 'policies'
+    _(result['data']['type']).must_equal 'authorized_account'
+    account = result['data']['attributes']['account']
+    _(account['type']).must_equal 'account'
+    _(account['attributes']['username']).must_equal 'alice'
+    _(account['attributes']['email']).must_equal 'alice@example.com'
+    _(account).must_include 'policies'
+
+    token = result['data']['attributes']['auth_token']
+    _(FaceCloak::AuthToken.load(token).scope.to_s).must_equal FaceCloak::AuthScope::READ_ONLY
+  end
+
+  it 'HAPPY: read-only token can read account details' do
+    alice = create_account('alice', 'alice@example.com', 'password123')
+
+    get 'api/v1/accounts/alice', nil,
+        auth_header_with_scope(alice, FaceCloak::AuthScope::READ_ONLY).merge('CONTENT_TYPE' => 'application/json')
+
+    _(last_response.status).must_equal 200
   end
 
   it 'HAPPY: should be able to search for account by email' do
@@ -93,5 +109,89 @@ describe 'Test Account API Integration' do
     alice = create_account('alice', 'alice@example.com', 'password123')
     get 'api/v1/accounts/non_existent', nil, auth_request_header(alice)
     _(last_response.status).must_equal 404
+  end
+
+  it 'HAPPY: should let a user update their username' do
+    alice = create_account('alice', 'alice@example.com', 'password123')
+
+    put 'api/v1/accounts/alice', { username: 'alice_new' }.to_json, auth_request_header(alice)
+
+    _(last_response.status).must_equal 200
+    result = JSON.parse(last_response.body)
+    _(result['data']['attributes']['username']).must_equal 'alice_new'
+    _(FaceCloak::Account.first(username: 'alice_new')).wont_be_nil
+  end
+
+  it 'HAPPY: should let a user change their password with current password' do
+    alice = create_account('alice', 'alice@example.com', 'password123')
+
+    put 'api/v1/accounts/alice',
+        { current_password: 'password123', new_password: 'new-password' }.to_json,
+        auth_request_header(alice)
+
+    _(last_response.status).must_equal 200
+    _(FaceCloak::Account.first(username: 'alice').password?('new-password')).must_equal true
+  end
+
+  it 'SAD: should reject password change with wrong current password' do
+    alice = create_account('alice', 'alice@example.com', 'password123')
+
+    put 'api/v1/accounts/alice',
+        { current_password: 'wrong', new_password: 'new-password' }.to_json,
+        auth_request_header(alice)
+
+    _(last_response.status).must_equal 403
+    _(FaceCloak::Account.first(username: 'alice').password?('password123')).must_equal true
+  end
+
+  it 'SECURITY: should reject account updates with a read-only token' do
+    alice = create_account('alice', 'alice@example.com', 'password123')
+
+    put 'api/v1/accounts/alice',
+        { username: 'alice_new' }.to_json,
+        auth_header_with_scope(alice, FaceCloak::AuthScope::READ_ONLY).merge('CONTENT_TYPE' => 'application/json')
+
+    _(last_response.status).must_equal 403
+  end
+
+  it 'HAPPY: should let an admin see all accounts' do
+    admin = grant_admin(create_account('admin', 'admin@example.com', 'password123'))
+    create_account('bob', 'bob@example.com', 'password123')
+
+    get 'api/v1/accounts', nil, auth_request_header(admin)
+
+    _(last_response.status).must_equal 200
+    usernames = JSON.parse(last_response.body)['data'].map { |account| account['username'] }
+    _(usernames).must_include 'admin'
+    _(usernames).must_include 'bob'
+  end
+
+  it 'HAPPY: should let an admin delete another user' do
+    admin = grant_admin(create_account('admin', 'admin@example.com', 'password123'))
+    bob = create_account('bob', 'bob@example.com', 'password123')
+
+    delete 'api/v1/accounts/bob', nil, auth_request_header(admin)
+
+    _(last_response.status).must_equal 200
+    _(FaceCloak::Account[bob.id]).must_be_nil
+  end
+
+  it 'SAD: should not let a normal user delete another user' do
+    alice = create_account('alice', 'alice@example.com', 'password123')
+    bob = create_account('bob', 'bob@example.com', 'password123')
+
+    delete 'api/v1/accounts/bob', nil, auth_request_header(alice)
+
+    _(last_response.status).must_equal 403
+    _(FaceCloak::Account[bob.id]).wont_be_nil
+  end
+
+  it 'HAPPY: should let a user delete themselves' do
+    alice = create_account('alice', 'alice@example.com', 'password123')
+
+    delete 'api/v1/accounts/alice', nil, auth_request_header(alice)
+
+    _(last_response.status).must_equal 200
+    _(FaceCloak::Account[alice.id]).must_be_nil
   end
 end

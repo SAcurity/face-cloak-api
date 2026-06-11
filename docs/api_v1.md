@@ -11,6 +11,9 @@ Detailed technical documentation for FaceCloak API routes.
 - **Protected Routes**: `Authorization: Bearer <auth_token>`
 - **JSON Requests**: `Content-Type: application/json`
 
+### Auth Scopes
+Auth tokens carry an encrypted authorization scope. Password login and SSO login issue full session tokens (`*:write`). Account detail responses include a reduced read-only API key (`*:read`) that can read protected resources but cannot upload, delete, assign, respond, decline, or otherwise mutate state.
+
 ### Common Response Codes
 - `200 OK`: Request succeeded.
 - `201 Created`: Resource created successfully.
@@ -25,7 +28,7 @@ Detailed technical documentation for FaceCloak API routes.
 ## 1. Authentication
 
 ### POST `/auth/authenticate`
-Authenticates a user and issues an auth token.
+Authenticates a user and issues a full-scope auth token.
 - **Request Body**:
   ```json
   {
@@ -43,6 +46,20 @@ Authenticates a user and issues an auth token.
     }
   }
   ```
+
+### POST `/auth/sso`
+Authenticates a Google SSO user after the Web App completes the OAuth/OIDC browser flow.
+- **Request Body**:
+  ```json
+  {
+    "provider": "google",
+    "id_token": "google OIDC id_token",
+    "jwks": { "keys": [] }
+  }
+  ```
+- **Success Response (200)**: Same envelope as password authentication.
+- **Validation**: The API verifies the JWT signature, `aud`, `iss`, expiration, subject, email, and `email_verified`.
+- **Note**: The API uses `jwt` and `http` only; it does not use Google's packaged SSO gems.
 
 ### POST `/auth/register`
 Validates email and sends a registration verification link.
@@ -64,18 +81,57 @@ Lists all accounts (Admins see all, Users see themselves).
 - **Success Response (200)**:
   ```json
   {
-    "data": [ { "id": "UUID", "username": "alice", "policies": { ... } } ],
+    "data": [
+      {
+        "id": 1,
+        "username": "alice",
+        "email": "alice@example.com",
+        "created_at": "timestamp",
+        "updated_at": "timestamp",
+        "policies": { ... }
+      }
+    ],
     "capabilities": { "is_admin": false, ... }
   }
   ```
+- **Auth**: Admins see all accounts; regular users see only themselves.
 
 ### POST `/accounts`
 Creates a new account (Public route).
 - **Request Body**: `{ "username": "...", "email": "...", "password": "..." }`
 
 ### GET `/accounts/:username`
-Retrieves account metadata and permissions.
-- **Success Response (200)**: Includes `policies` (what you can do to them) and `capabilities` (what you can do in general).
+Retrieves account metadata and permissions, and returns a read-only API key for that account.
+- **Success Response (200)**:
+  ```json
+  {
+    "data": {
+      "type": "authorized_account",
+      "attributes": {
+        "account": { "type": "account", "attributes": { ... }, "policies": { ... } },
+        "auth_token": "read-only scoped token"
+      }
+    }
+  }
+  ```
+
+### PUT `/accounts/:username`
+Updates account settings.
+- **Auth**: The account owner or an admin can change username. Only the account owner can change password.
+- **Request Body**:
+  ```json
+  {
+    "username": "new_username",
+    "current_password": "old-password",
+    "new_password": "new-password"
+  }
+  ```
+- **Password Rule**: Local password accounts must provide `current_password`; SSO-only accounts may set their first local password while authenticated.
+
+### DELETE `/accounts/:username`
+Deletes an account.
+- **Auth**: Admin only; admins cannot delete themselves.
+- **Behavior**: Deletes the account and removes owned image files from storage.
 
 ### POST `/accounts/search`
 Finds an account by username or email.
@@ -150,6 +206,8 @@ Declines the assignment.
 
 ### GET `/images/:id/logs`
 Audit logs for all faces in an image (Owner only).
+- **Response Data**: Each log includes the action snapshot captured when the log was written: `assigned_user_id`, `assigned_user`, and `cloak_type`.
 
 ### GET `/face_records/:id/logs`
 Audit logs for a specific face (Owner or Assignee).
+- **Response Data**: Each log includes the action snapshot captured when the log was written: `assigned_user_id`, `assigned_user`, and `cloak_type`.

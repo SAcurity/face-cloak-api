@@ -9,7 +9,10 @@ erDiagram
         string username UK "not null"
         string email_secure "not null"
         string email_hash "not null, indexed"
-        string password_digest "not null"
+        string password_digest "nullable for SSO-only accounts"
+        string sso_provider "nullable"
+        string sso_subject "nullable"
+        string avatar "nullable"
         datetime created_at
         datetime updated_at
     }
@@ -55,7 +58,9 @@ erDiagram
         integer id PK
         uuid face_record_id FK "not null"
         integer actor_id FK "not null"
+        integer assigned_user_id FK "nullable snapshot"
         string action "not null"
+        string cloak_type "nullable snapshot"
         datetime created_at
     }
 
@@ -77,11 +82,11 @@ erDiagram
 
 ## Entities
 
-- **Accounts**: Stores user information with encrypted PII (email) and salted/hashed passwords.
+- **Accounts**: Stores user information with encrypted PII (email), salted/hashed passwords for local accounts, and optional SSO identity fields for OAuth/OIDC accounts.
 - **Roles**: Enumerates system roles (e.g., owner, user).
 - **Images**: Stores image metadata and links to physical storage. Images are owned by an account.
 - **FaceRecords**: Represents detected faces within an image. Each face can be assigned to a user who controls its privacy state. Coordinates are stored as normalized floats, and `landmarks` is an optional JSON string used only when a detector provides landmark data.
-- **ActionLogs**: Audit trail for all state-changing operations on face records.
+- **ActionLogs**: Audit trail for all state-changing operations on face records, including the assigned user and cloak type snapshot captured at the time of the action.
 - **Join Tables**:
     - `accounts_roles`: Many-to-many relationship between users and roles.
     - `accounts_images`: Manages access permissions for assignees.
@@ -89,6 +94,7 @@ erDiagram
 ## Constraints & Relationships
 
 - `accounts.username` is unique.
+- `accounts[sso_provider, sso_subject]` is unique when SSO identity is present.
 - `roles.name` is unique.
 - `images` has a unique `[owner_id, file_name]` constraint.
 - `face_records` has a unique `[image_id, assigned_user_id]` constraint, enforcing one assigned face per user per image when `assigned_user_id` is present.
@@ -97,9 +103,12 @@ erDiagram
 - Deleting an assigned `account` sets `face_records.assigned_user_id` to `NULL`.
 - Deleting an owner account cascades to owned `images`.
 - Deleting an actor account cascades to its `action_logs`.
+- Deleting an assigned-user account sets `action_logs.assigned_user_id` to `NULL`; the historical `cloak_type` snapshot remains.
 
 ## Security Rationale
 
 - **Hybrid IDs**: Incrementing integers for internal account management; UUIDs for public-facing resources (Images, FaceRecords) to prevent enumeration attacks.
 - **PII Protection**: Sensitive fields like email are stored as encrypted ciphertext with a separate HMAC hash for deterministic lookup.
+- **SSO Identity**: Google OIDC accounts are linked by provider subject after verifying the id token signature, audience, issuer, expiration, subject, verified email, and JWKS key id.
+- **Audit Snapshots**: Action logs persist face state at write time, so later changes to a face record do not rewrite historical log meaning.
 - **Cascade Behavior**: Strict foreign key constraints ensure that deleting an image automatically removes its associated face records and audit logs.

@@ -20,14 +20,19 @@ module FaceCloak
       raw.empty? ? {} : JSON.parse(raw, symbolize_names: true)
     end
 
-    def authenticated_account
+    def authorized_account
       header = @routing.headers['AUTHORIZATION']
       return nil unless header
 
       scheme, token = header.split(' ', 2)
       raise AuthToken::InvalidTokenError unless scheme&.casecmp('Bearer')&.zero? && token
 
-      AuthToken.load(token).payload
+      auth_token = AuthToken.load(token)
+      AuthorizedAccount.new(auth_token.payload, auth_token.scope)
+    end
+
+    def authenticated_account
+      authorized_account&.account
     end
   end
 end

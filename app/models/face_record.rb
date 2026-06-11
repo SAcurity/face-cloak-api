@@ -33,6 +33,15 @@ module FaceCloak
       !assigned_user_id.nil?
     end
 
+    def add_audit_log(action:, actor_id:)
+      add_action_log(
+        action:,
+        actor_id:,
+        assigned_user_id:,
+        cloak_type: effective_cloak_type
+      )
+    end
+
     def effective_cloak_type
       # Direct access to DB column, fallback to 'blur'
       self[:cloak_type].nil? || self[:cloak_type].empty? ? 'blur' : self[:cloak_type]

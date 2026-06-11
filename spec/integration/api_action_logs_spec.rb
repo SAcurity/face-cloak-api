@@ -37,6 +37,51 @@ describe 'Test ActionLog API Integration' do
     _(result['data'].count).must_be :>=, 1
   end
 
+  it 'HAPPY: should include face assignment state in action logs' do
+    face = FaceCloak::CreateFaceRecord.call(face_data: { image_id: @img.id }, actor_id: @owner.id)
+    FaceCloak::AssignFaceRecord.call(face_record_id: face.id, assigned_user_id: @assignee.id, actor_id: @owner.id)
+    FaceCloak::RespondToFaceRecord.call(
+      face_record_id: face.id,
+      cloak_type: 'mask',
+      actor_id: @assignee.id,
+      skip_render: true
+    )
+
+    get "api/v1/images/#{@img.id}/logs", nil, @req_header
+    _(last_response.status).must_equal 200
+
+    result = JSON.parse(last_response.body)
+    respond_log = result['data'].find { |log| log['attributes']['action'] == 'respond' }
+    attrs = respond_log['attributes']
+
+    _(attrs['assigned_user_id']).must_equal @assignee.id
+    _(attrs['assigned_user']).must_equal(
+      'id' => @assignee.id,
+      'username' => @assignee.username
+    )
+    _(attrs['cloak_type']).must_equal 'mask'
+  end
+
+  it 'SECURITY: should keep respond log cloak as an immutable snapshot' do
+    face = FaceCloak::CreateFaceRecord.call(face_data: { image_id: @img.id }, actor_id: @owner.id)
+    FaceCloak::AssignFaceRecord.call(face_record_id: face.id, assigned_user_id: @assignee.id, actor_id: @owner.id)
+    FaceCloak::RespondToFaceRecord.call(
+      face_record_id: face.id,
+      cloak_type: 'mask',
+      actor_id: @assignee.id,
+      skip_render: true
+    )
+    face.update(cloak_type: 'sunglasses')
+
+    get "api/v1/images/#{@img.id}/logs", nil, @req_header
+    _(last_response.status).must_equal 200
+
+    result = JSON.parse(last_response.body)
+    respond_log = result['data'].find { |log| log['attributes']['action'] == 'respond' }
+
+    _(respond_log['attributes']['cloak_type']).must_equal 'mask'
+  end
+
   it 'HAPPY: should create an unassign log through the API' do
     face = FaceCloak::CreateFaceRecord.call(face_data: { image_id: @img.id }, actor_id: @owner.id)
     FaceCloak::AssignFaceRecord.call(face_record_id: face.id, assigned_user_id: @assignee.id, actor_id: @owner.id)
