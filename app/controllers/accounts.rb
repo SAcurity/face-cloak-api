@@ -18,6 +18,21 @@ module FaceCloak
         routing.halt 401, { message: 'Expired auth token' }.to_json
       end
 
+      routing.on 'usernames' do
+        routing.get do
+          require_authenticated_account(routing)
+
+          accounts_data = Account.order(:username).map do |account|
+            {
+              id: account.id,
+              username: account.username
+            }
+          end
+
+          JSON.pretty_generate(data: accounts_data)
+        end
+      end
+
       routing.on 'search' do
         routing.post do
           search_data = HttpRequest.new(routing).signed_body_data
