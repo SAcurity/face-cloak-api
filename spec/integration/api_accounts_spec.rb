@@ -43,6 +43,21 @@ describe 'Test Account API Integration' do
     _(last_response.status).must_equal 401
   end
 
+  it 'HAPPY: should list usernames for assignment without exposing account details' do
+    alice = create_account('alice', 'alice@example.com', 'password123')
+    create_account('bob', 'bob@example.com', 'password123')
+
+    get 'api/v1/accounts/usernames', nil, auth_request_header(alice)
+    _(last_response.status).must_equal 200
+
+    result = JSON.parse(last_response.body)
+    _(result['data']).must_equal [
+      { 'id' => alice.id, 'username' => 'alice' },
+      { 'id' => FaceCloak::Account.first(username: 'bob').id, 'username' => 'bob' }
+    ]
+    _(result['data'].first).wont_include 'email'
+  end
+
   it 'SAD: should not be able to create an account with existing username' do
     create_account('alice', 'alice@example.com', 'password123')
     account_data = { username: 'alice', email: 'alice2@example.com', password: 'password123' }
