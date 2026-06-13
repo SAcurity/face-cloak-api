@@ -19,15 +19,17 @@ module FaceCloak
     LANDMARK_WIDTH_FACTOR = 2.6
     LANDMARK_HEIGHT_FACTOR = 2.3
 
-    def self.call(image:)
+    def self.call(image:, viewer: nil)
       FileUtils.mkdir_p(CACHE_DIR)
       image.refresh
 
-      full_cache_path = File.join(CACHE_DIR, "full_#{image.id}_#{image.privacy_hash}.png")
+      # Privacy hash should include viewer_id to avoid caching conflicts between users
+      privacy_tag = viewer ? "#{image.privacy_hash}_v#{viewer.id}" : image.privacy_hash
+      full_cache_path = File.join(CACHE_DIR, "full_#{image.id}_#{privacy_tag}.png")
       return File.binread(full_cache_path) if File.exist?(full_cache_path)
 
       source_path = ImageStorage.local_path(image.file_data)
-      local_faces, working_path, temp_paths = prepare_cloak_inputs(source_path, image.ordered_face_records)
+      local_faces, working_path, temp_paths = prepare_cloak_inputs(source_path, image.ordered_face_records, viewer)
       render_with_opencv(
         input_path: working_path,
         output_path: full_cache_path,
@@ -38,13 +40,15 @@ module FaceCloak
       temp_paths&.each { |path| FileUtils.rm_f(path) }
     end
 
-    def self.prepare_cloak_inputs(source_path, faces)
+    def self.prepare_cloak_inputs(source_path, faces, viewer)
       temp_paths = []
       local_faces = []
       ai_patches = []
 
       faces.each do |face|
-        payload = face_payload(face)
+        payload = face_payload(face, viewer)
+        next if payload[:cloak_type] == 'unveil'
+
         if ai_cloak?(payload[:cloak_type])
           begin
             ai_patches << build_ai_patch(source_path, face, temp_paths)
@@ -157,10 +161,13 @@ module FaceCloak
       File.join(CACHE_DIR, "patch_#{face.id}_#{face.effective_cloak_type}.png")
     end
 
-    def self.face_payload(face)
+    def self.face_payload(face, viewer = nil)
+      # If the face is assigned to the current viewer, always unveil it for them.
+      actual_cloak = viewer && face.assigned_user_id == viewer.id ? 'unveil' : face.effective_cloak_type
+
       {
         id: face.id,
-        cloak_type: face.effective_cloak_type,
+        cloak_type: actual_cloak,
         x_min: face.x_min,
         y_min: face.y_min,
         x_max: face.x_max,
