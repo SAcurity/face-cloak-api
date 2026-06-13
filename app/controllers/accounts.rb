@@ -94,6 +94,10 @@ module FaceCloak
           require_authenticated_account(routing)
 
           viewable_accounts = AccountPolicy::AccountScope.new(viewer, auth_scope: current_auth_scope).viewable
+          
+          # Sort viewable_accounts to put viewer at the top
+          viewable_accounts = viewable_accounts.sort_by { |a| a.id == viewer.id ? 0 : 1 }
+
           accounts_data = viewable_accounts.map do |account|
             policy = AccountPolicy.new(viewer, account, auth_scope: current_auth_scope)
             {
