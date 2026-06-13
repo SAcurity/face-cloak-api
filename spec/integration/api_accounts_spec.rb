@@ -154,6 +154,39 @@ describe 'Test Account API Integration' do
     _(FaceCloak::Account.first(username: 'alice_new')).wont_be_nil
   end
 
+  it 'HAPPY: should let an admin update another account identity' do
+    admin = grant_admin(create_account('admin', 'admin@example.com', 'password123'))
+    bob = create_account('bob', 'bob@example.com', 'password123')
+
+    put 'api/v1/accounts/bob', { identity: 'admin' }.to_json, auth_request_header(admin)
+
+    _(last_response.status).must_equal 200
+    _(bob.refresh.system_roles.map(&:name)).must_include 'admin'
+  end
+
+  it 'HAPPY: should accept identity update payloads with string keys' do
+    admin = grant_admin(create_account('admin', 'admin@example.com', 'password123'))
+    bob = create_account('bob', 'bob@example.com', 'password123')
+
+    FaceCloak::UpdateAccount.call(
+      viewer: admin,
+      target: bob,
+      update_data: { 'identity' => 'admin' },
+      auth_scope: FaceCloak::AuthScope.new
+    )
+
+    _(bob.refresh.system_roles.map(&:name)).must_include 'admin'
+  end
+
+  it 'SECURITY: should not let an admin change their own identity' do
+    admin = grant_admin(create_account('admin', 'admin@example.com', 'password123'))
+
+    put 'api/v1/accounts/admin', { identity: 'member' }.to_json, auth_request_header(admin)
+
+    _(last_response.status).must_equal 403
+    _(admin.refresh.system_roles.map(&:name)).must_include 'admin'
+  end
+
   it 'HAPPY: should let a user change their password with current password' do
     alice = create_account('alice', 'alice@example.com', 'password123')
 
@@ -196,6 +229,7 @@ describe 'Test Account API Integration' do
     usernames = JSON.parse(last_response.body)['data'].map { |account| account['username'] }
     _(usernames).must_include 'admin'
     _(usernames).must_include 'bob'
+    _(JSON.parse(last_response.body)['data'].first).must_include 'last_active_at'
   end
 
   it 'HAPPY: should let an admin delete another user' do

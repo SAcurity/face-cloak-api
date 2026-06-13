@@ -44,9 +44,13 @@ task :print_env do # rubocop:disable Rake/Desc
   puts "Environment: #{ENV['RACK_ENV'] || 'development'}"
 end
 
-desc 'Run application console (pry)'
+desc 'Run application console'
 task console: :print_env do
-  sh 'pry -r ./spec/test_load_all'
+  require_app
+  require 'irb'
+
+  ARGV.clear
+  IRB.start
 end
 
 # run server
