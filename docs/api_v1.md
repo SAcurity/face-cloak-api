@@ -170,16 +170,12 @@ Deletes an account.
 - **Behavior**: Deletes the account and removes owned image files from storage.
 
 ### POST `/accounts/search`
-Finds an account by username or email.
+Finds an account by username.
 - **Request Body**: Signed public request whose `data` is:
   ```json
   { "username": "alice" }
   ```
-  OR
-  ```json
-  { "email": "user@example.com" }
-  ```
-- **Note**: Username lookup is direct, while email lookup is performed via keyed-hash (blind index).
+- **Note**: Username lookup is direct.
 
 ---
 
