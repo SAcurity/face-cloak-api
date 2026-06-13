@@ -34,7 +34,8 @@ module FaceCloak
     end
 
     def add_audit_log(action:, actor_id:)
-      add_action_log(
+      ActionLog.create(
+        face_record_id: id,
         action:,
         actor_id:,
         assigned_user_id:,
