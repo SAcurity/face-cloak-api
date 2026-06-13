@@ -107,6 +107,7 @@ module FaceCloak
               sso_provider: account.sso_provider,
               created_at: account.created_at,
               updated_at: account.updated_at,
+              last_active_at: last_active_at(account),
               policies: policy.index_summary
             }
           end
@@ -130,6 +131,10 @@ module FaceCloak
           routing.halt 400, { message: e.message }.to_json
         end
       end
+    end
+
+    def last_active_at(account)
+      ActionLog.where(actor_id: account.id).max(:created_at) || account.updated_at
     end
   end
 end
