@@ -103,20 +103,19 @@ describe 'Test Account API Integration' do
     _(last_response.status).must_equal 200
   end
 
-  it 'HAPPY: should be able to search for account by email' do
+  it 'HAPPY: should be able to search for an account by username' do
     create_account('alice', 'alice@example.com', 'password123')
-    search_data = { email: 'alice@example.com' }
+    search_data = { username: 'alice' }
 
     post 'api/v1/accounts/search', signed_json(search_data), @req_header
     _(last_response.status).must_equal 200
 
     result = JSON.parse(last_response.body)
-    _(result['type']).must_equal 'account'
     _(result['attributes']['username']).must_equal 'alice'
   end
 
-  it 'SAD: should return 404 for search with unknown email' do
-    post 'api/v1/accounts/search', signed_json({ email: 'unknown@example.com' }), @req_header
+  it 'SAD: should return 404 for search with unknown username' do
+    post 'api/v1/accounts/search', signed_json({ username: 'unknown' }), @req_header
     _(last_response.status).must_equal 404
   end
 

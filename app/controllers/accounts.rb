@@ -36,11 +36,8 @@ module FaceCloak
       routing.on 'search' do
         routing.post do
           search_data = HttpRequest.new(routing).signed_body_data
-          account = if search_data[:username]
-                      Account.first(username: search_data[:username])
-                    elsif search_data[:email]
-                      Account.first(email_hash: SecureDB.hash(search_data[:email]))
-                    end
+          username = search_data[:username]
+          account = Account.first(username:) if username
 
           raise(Sequel::NoMatchingRow, 'Account not found') unless account
 

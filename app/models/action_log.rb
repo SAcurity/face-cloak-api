@@ -9,6 +9,16 @@ module FaceCloak
     many_to_one :face_record
     many_to_one :actor, class: :'FaceCloak::Account'
     many_to_one :assigned_user, class: :'FaceCloak::Account', key: :assigned_user_id
+
+    # Explicitly define accessors to bypass potential Sequel/Heroku schema detection issues
+    def assigned_user_id=(val)
+      self[:assigned_user_id] = val
+    end
+
+    def assigned_user_id
+      self[:assigned_user_id]
+    end
+
     plugin :timestamps, update_on_create: true
     plugin :whitelist_security
     set_allowed_columns :face_record_id, :actor_id, :action, :assigned_user_id, :cloak_type
