@@ -117,8 +117,20 @@ Lists all accounts (Admins see all, Users see themselves).
     ],
     "capabilities": { "is_admin": false, ... }
   }
-  ```
+```
 - **Auth**: Admins see all accounts; regular users see only themselves.
+
+### GET `/accounts/usernames`
+Lists account IDs and usernames for assignment autocomplete.
+- **Auth**: Any authenticated account.
+- **Success Response (200)**:
+  ```json
+  {
+    "data": [
+      { "id": 1, "username": "alice" }
+    ]
+  }
+  ```
 
 ### POST `/accounts`
 Creates a new account (Public route).
@@ -192,6 +204,14 @@ Returns the **binary image content**.
 Returns the **raw original binary** regardless of face state.
 - **Auth**: Owner or Admin only. Others receive `404`.
 
+### GET `/images/:id/logs`
+Audit logs for all faces in an image.
+- **Auth**: Owner or Assignee with log visibility.
+- **Success Response (200)**:
+  ```json
+  { "data": [] }
+  ```
+
 ### DELETE `/images/:id`
 Deletes image and all associated face records and files.
 - **Auth**: Owner or Admin only.
@@ -204,6 +224,20 @@ Deletes image and all associated face records and files.
 Lists all detected faces in a specific image.
 - **Auth**: Owner only.
 
+### POST `/images/:id/face_records`
+Creates a face record for a specific image.
+- **Auth**: Owner or Admin with face-management permission.
+- **Request Body**:
+  ```json
+  {
+    "x_min": 10,
+    "y_min": 20,
+    "x_max": 110,
+    "y_max": 140
+  }
+  ```
+- **Success Response (201)**: Returns the created face record.
+
 ### GET `/face_records/:id`
 Get details of a specific face record.
 - **Auth**: Owner or Assignee only.
@@ -212,6 +246,11 @@ Get details of a specific face record.
 Assigns a face to a user for their decision.
 - **Auth**: Owner only.
 - **Request Body**: `{ "assigned_user_id": "UUID" }`
+
+### DELETE `/face_records/:id/assignment`
+Removes an assignment before the assignee responds.
+- **Auth**: Owner only.
+- **Conflict**: Returns `409` if the face record has already been responded to.
 
 ### POST `/face_records/:id/respond`
 Sets the privacy preference (cloak type) for the face.
