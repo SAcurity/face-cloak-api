@@ -8,12 +8,16 @@ Detailed technical specifications can be found in [docs/api_v1.md](docs/api_v1.m
 
 ### 1. Authentication
 - `POST /api/v1/auth/authenticate`
+- `POST /api/v1/auth/sso`
 - `POST /api/v1/auth/register`
 
 ### 2. Accounts
 - `GET /api/v1/accounts`
 - `POST /api/v1/accounts`
+- `GET /api/v1/accounts/usernames`
 - `GET /api/v1/accounts/:username`
+- `PUT /api/v1/accounts/:username`
+- `DELETE /api/v1/accounts/:username`
 - `POST /api/v1/accounts/search`
 
 ### 3. Images
@@ -21,6 +25,7 @@ Detailed technical specifications can be found in [docs/api_v1.md](docs/api_v1.m
 - `POST /api/v1/images`
 - `GET /api/v1/images/:id`
 - `GET /api/v1/images/:id/raw`
+- `GET /api/v1/images/:id/logs`
 - `DELETE /api/v1/images/:id`
 
 ### 4. Face Records
@@ -40,8 +45,14 @@ Detailed technical specifications can be found in [docs/api_v1.md](docs/api_v1.m
 
 ## Quick Start
 
+### 0. Prerequisites
+- Ruby 4.0.2
+- Bundler matching `Gemfile.lock`
+- Python 3 for face/image processing dependencies
+
 ### 1. Install Dependencies
 ```bash
+rbenv local 4.0.2
 bundle install
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
@@ -58,9 +69,13 @@ rake newkey:auth
 
 ### 3. Run Server
 ```bash
-rake db:migrate && rake db:seed
-rake puma
+bundle exec rake db:migrate
+# Fresh dev DB only; seeds are not intended to be rerun repeatedly on existing data.
+bundle exec rake db:seed
+bundle exec rake rerun
 ```
+
+The API listens on `http://localhost:3000`; v1 routes are under `http://localhost:3000/api/v1`.
 
 ## Documentation
 - **API Reference**: [docs/api_v1.md](docs/api_v1.md)
