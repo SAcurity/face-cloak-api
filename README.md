@@ -44,7 +44,7 @@ Detailed technical specifications can be found in [docs/api_v1.md](docs/api_v1.m
 ```bash
 bundle install
 python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements-face-detector.txt
+.venv/bin/python -m pip install -r requirements.txt
 ```
 
 ### 2. Configuration
