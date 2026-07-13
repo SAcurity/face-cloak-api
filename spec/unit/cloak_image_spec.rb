@@ -31,6 +31,42 @@ describe 'Test CloakImage Unit Logic' do
     _(height).must_equal 13
   end
 
+  it 'HAPPY: unveils a pending assigned face for identity confirmation' do
+    face = Struct.new(:id, :assigned_user_id, :responded_at, :effective_cloak_type,
+                      :x_min, :y_min, :x_max, :y_max, :landmarks_map)
+                 .new(1, 10, nil, 'blur', 0.4, 0.3, 0.6, 0.7, {})
+    viewer = Struct.new(:id).new(10)
+
+    payload = FaceCloak::CloakImage.face_payload(face, viewer)
+
+    _(payload[:cloak_type]).must_equal 'unveil'
+  end
+
+  it 'HAPPY: keeps an assigned viewer selected cloak after response' do
+    face = Struct.new(:id, :assigned_user_id, :responded_at, :effective_cloak_type,
+                      :x_min, :y_min, :x_max, :y_max, :landmarks_map)
+                 .new(1, 10, Time.now, 'sunglasses', 0.4, 0.3, 0.6, 0.7, {})
+    viewer = Struct.new(:id).new(10)
+
+    payload = FaceCloak::CloakImage.face_payload(face, viewer)
+
+    _(payload[:cloak_type]).must_equal 'sunglasses'
+  end
+
+  it 'HAPPY: self preview only cloaks the viewer responded face' do
+    face = Struct.new(:id, :assigned_user_id, :responded_at, :effective_cloak_type,
+                      :x_min, :y_min, :x_max, :y_max, :landmarks_map)
+    viewer = Struct.new(:id).new(10)
+    own_face = face.new(1, 10, Time.now, 'sunglasses', 0.4, 0.3, 0.6, 0.7, {})
+    other_face = face.new(2, 11, Time.now, 'mask', 0.1, 0.1, 0.2, 0.2, {})
+
+    own_payload = FaceCloak::CloakImage.face_payload(own_face, viewer, self_preview: true)
+    other_payload = FaceCloak::CloakImage.face_payload(other_face, viewer, self_preview: true)
+
+    _(own_payload[:cloak_type]).must_equal 'sunglasses'
+    _(other_payload[:cloak_type]).must_equal 'unveil'
+  end
+
   it 'HAPPY: can derive a landmark face box without enabling it for rendering' do
     landmarks = {
       left_eye: [400, 460],

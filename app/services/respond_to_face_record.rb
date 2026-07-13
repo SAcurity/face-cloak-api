@@ -11,8 +11,7 @@ module FaceCloak
       face_record.save_changes
 
       # CRITICAL: Clear all cache for this image
-      full_cache = File.join(CloakImage::CACHE_DIR, "full_#{face_record.image_id}_*.png")
-      Dir.glob(full_cache).each { |f| FileUtils.rm_f(f) }
+      CloakImage.clear_cached_image(face_record.image_id)
 
       # Rebuild the protected image immediately so the response succeeds or fails here.
       # When `skip_render` is true (used during seeding), skip the expensive

@@ -19,17 +19,18 @@ module FaceCloak
     LANDMARK_WIDTH_FACTOR = 2.6
     LANDMARK_HEIGHT_FACTOR = 2.3
 
-    def self.call(image:, viewer: nil)
+    def self.call(image:, viewer: nil, self_preview: false)
       FileUtils.mkdir_p(CACHE_DIR)
       image.refresh
 
-      # Privacy hash should include viewer_id to avoid caching conflicts between users
-      privacy_tag = viewer ? "#{image.privacy_hash}_v#{viewer.id}" : image.privacy_hash
+      privacy_tag = cache_privacy_tag(image, viewer, self_preview)
       full_cache_path = File.join(CACHE_DIR, "full_#{image.id}_#{privacy_tag}.png")
       return File.binread(full_cache_path) if File.exist?(full_cache_path)
 
       source_path = ImageStorage.local_path(image.file_data)
-      local_faces, working_path, temp_paths = prepare_cloak_inputs(source_path, image.ordered_face_records, viewer)
+      local_faces, working_path, temp_paths = prepare_cloak_inputs(
+        source_path, image.ordered_face_records, viewer, self_preview:
+      )
       render_with_opencv(
         input_path: working_path,
         output_path: full_cache_path,
@@ -40,13 +41,19 @@ module FaceCloak
       temp_paths&.each { |path| FileUtils.rm_f(path) }
     end
 
-    def self.prepare_cloak_inputs(source_path, faces, viewer)
+    def self.cache_privacy_tag(image, viewer, self_preview)
+      viewer_tag = viewer ? "_v#{viewer.id}" : ''
+      preview_tag = self_preview ? '_self' : ''
+      "#{image.privacy_hash}#{preview_tag}#{viewer_tag}"
+    end
+
+    def self.prepare_cloak_inputs(source_path, faces, viewer, self_preview: false)
       temp_paths = []
       local_faces = []
       ai_patches = []
 
       faces.each do |face|
-        payload = face_payload(face, viewer)
+        payload = face_payload(face, viewer, self_preview:)
         next if payload[:cloak_type] == 'unveil'
 
         if ai_cloak?(payload[:cloak_type])
@@ -78,6 +85,11 @@ module FaceCloak
 
       message = stderr.to_s.empty? ? stdout.to_s : stderr.to_s
       raise "OpenCV cloak rendering failed: #{message.strip}"
+    end
+
+    def self.clear_cached_image(image_id)
+      full_cache = File.join(CACHE_DIR, "full_#{image_id}_*.png")
+      Dir.glob(full_cache).each { |file| FileUtils.rm_f(file) }
     end
 
     def self.build_ai_patch(source_path, face, temp_paths)
@@ -161,9 +173,8 @@ module FaceCloak
       File.join(CACHE_DIR, "patch_#{face.id}_#{face.effective_cloak_type}.png")
     end
 
-    def self.face_payload(face, viewer = nil)
-      # If the face is assigned to the current viewer, always unveil it for them.
-      actual_cloak = viewer && face.assigned_user_id == viewer.id ? 'unveil' : face.effective_cloak_type
+    def self.face_payload(face, viewer = nil, self_preview: false)
+      actual_cloak = effective_cloak_for(face, viewer, self_preview)
 
       {
         id: face.id,
@@ -174,6 +185,23 @@ module FaceCloak
         y_max: face.y_max,
         landmarks: face.respond_to?(:landmarks_map) ? face.landmarks_map : {}
       }
+    end
+
+    def self.effective_cloak_for(face, viewer, self_preview)
+      return self_preview_cloak(face, viewer) if self_preview
+      return 'unveil' if pending_assignee?(face, viewer)
+
+      face.effective_cloak_type
+    end
+
+    def self.self_preview_cloak(face, viewer)
+      return 'unveil' unless viewer && face.assigned_user_id == viewer.id && face.responded_at
+
+      face.effective_cloak_type
+    end
+
+    def self.pending_assignee?(face, viewer)
+      viewer && face.assigned_user_id == viewer.id && !face.responded_at
     end
 
     def self.get_pixel_coords(face, width, height)

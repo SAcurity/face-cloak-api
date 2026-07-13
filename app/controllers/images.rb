@@ -141,7 +141,7 @@ module FaceCloak
               GetImageRawFile.call(image_id: id)
             else
               response['X-Privacy-Filtered'] = 'true'
-              CloakImage.call(image: image, viewer: viewer)
+              CloakImage.call(image: image, viewer: viewer, self_preview: routing.params['self_preview'] == 'true')
             end
           end
 

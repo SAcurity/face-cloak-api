@@ -70,12 +70,16 @@ describe 'Test FaceRecord API Integration' do
 
   it 'HAPPY: should be able to assign a face record as owner' do
     face = FaceCloak::CreateFaceRecord.call(face_data: { image_id: @img.id }, actor_id: @owner.id)
+    cached_file = File.join(FaceCloak::CloakImage::CACHE_DIR, "full_#{@img.id}_stale.png")
+    FileUtils.mkdir_p(FaceCloak::CloakImage::CACHE_DIR)
+    File.write(cached_file, 'stale')
 
     post "api/v1/face_records/#{face.id}/assignment", { assigned_user_id: @assignee.id }.to_json, @req_header
     _(last_response.status).must_equal 201
 
     face.refresh
     _(face.assigned_user_id).must_equal @assignee.id
+    _(File.exist?(cached_file)).must_equal false
   end
 
   it 'SAD: should reject assignment without assigned user id' do
