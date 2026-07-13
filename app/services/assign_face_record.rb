@@ -14,6 +14,7 @@ module FaceCloak
 
       # Atomically assign face
       perform_assignment(face_record, assignee.id, actor_id)
+      CloakImage.clear_cached_image(face_record.image_id)
 
       face_record
     rescue Sequel::UniqueConstraintViolation
